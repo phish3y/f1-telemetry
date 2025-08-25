@@ -79,8 +79,11 @@ pub struct PacketMotionData {
 fn main() {
     env_logger::init();
 
-    let socket = UdpSocket::bind("0.0.0.0:20777").unwrap();
+    let ip = "0.0.0.0";
+    let port = "20777";
+    let socket = UdpSocket::bind(format!("{}:{}", ip, port)).unwrap();
     socket.set_read_timeout(Some(Duration::from_secs(300))).unwrap();
+    log::info!("recv from: {}:{}", ip, port);
 
     loop {
         let mut buf = [0u8; 2048];
