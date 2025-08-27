@@ -35,8 +35,7 @@ pub enum PacketId {
     TyreSets = 12,
     MotionEx = 13,
     TimeTrial = 14,
-    LapHistory = 15,
-    LapPositions = 16,
+    LapPositions = 15,
 }
 
 impl TryFrom<u8> for PacketId {
@@ -59,8 +58,7 @@ impl TryFrom<u8> for PacketId {
             12 => Ok(PacketId::TyreSets),
             13 => Ok(PacketId::MotionEx),
             14 => Ok(PacketId::TimeTrial),
-            15 => Ok(PacketId::LapHistory),
-            16 => Ok(PacketId::LapPositions),
+            15 => Ok(PacketId::LapPositions),
             _ => Err(()),
         }
     }

@@ -1,21 +1,34 @@
 use std::{net::UdpSocket, time::Duration};
 
+use rdkafka::{producer::FutureProducer, ClientConfig};
+
 mod packet;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     env_logger::init();
 
-    let ip = "0.0.0.0";
-    let port = "20777";
-    let socket = UdpSocket::bind(format!("{}:{}", ip, port)).unwrap();
+    let bootstrap_servers = std::env::var("KAFKA_BOOTSTRAP_SERVERS").unwrap();
+    let udp_url = std::env::var("UDP_URL").unwrap();
+    let udp_port = std::env::var("UDP_PORT").unwrap();
+
+    let producer: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", &bootstrap_servers)
+        .set("message.timeout.ms", "5000")
+        .create()
+        .expect("Failed to create Kafka producer");
+ 
+    let socket = UdpSocket::bind(format!("{}:{}", udp_url, udp_port)).unwrap();
     socket.set_read_timeout(Some(Duration::from_secs(300))).unwrap();
-    log::info!("recv from: {}:{}", ip, port);
+    
+    log::info!("recv from: {}:{}", udp_url, udp_port);
+    log::info!("publishing to: {}", &bootstrap_servers);
 
     loop {
         let mut buf = [0u8; 2048];
         let (amt, _src) = socket.recv_from(&mut buf).unwrap();
 
-        log::info!("recv {} bytes", amt);
+        log::debug!("recv {} bytes", amt);
         let header: &packet::header::PacketHeader = bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::header::PacketHeader>()]);
 
         match packet::header::PacketId::try_from(header.m_packet_id) {
@@ -23,115 +36,112 @@ fn main() {
                 if amt >= std::mem::size_of::<packet::payload::car_damage::PacketCarDamage>() {
                     let _damage: &packet::payload::car_damage::PacketCarDamage =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::car_damage::PacketCarDamage>()]);
-                    log::info!("Car damage packet received");
+                    log::debug!("car damage packet received");
                 }
             }
             Ok(packet::header::PacketId::CarSetups) => {
                 if amt >= std::mem::size_of::<packet::payload::car_setups::PacketCarSetups>() {
                     let _car_setups: &packet::payload::car_setups::PacketCarSetups =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::car_setups::PacketCarSetups>()]);
-                    log::info!("Car setups packet received");
+                    log::debug!("car setups packet received");
                 }
             }
             Ok(packet::header::PacketId::CarStatus) => {
                 if amt >= std::mem::size_of::<packet::payload::car_status::PacketCarStatus>() {
                     let _car_status: &packet::payload::car_status::PacketCarStatus =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::car_status::PacketCarStatus>()]);
-                    log::info!("Car status packet received");
+                    log::debug!("car status packet received");
                 }
             }
             Ok(packet::header::PacketId::CarTelemetry) => {
                 if amt >= std::mem::size_of::<packet::payload::car_telemetry::PacketCarTelemetry>() {
                     let _telemetry: &packet::payload::car_telemetry::PacketCarTelemetry =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::car_telemetry::PacketCarTelemetry>()]);
-                    log::info!("Car telemetry packet received");
+                    log::debug!("car telemetry packet received");
                 }
             }
             Ok(packet::header::PacketId::Event) => {
                 if amt >= std::mem::size_of::<packet::payload::event::PacketEvent>() {
                     let _event: &packet::payload::event::PacketEvent =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::event::PacketEvent>()]);
-                    log::info!("Event packet received");
+                    log::debug!("event packet received");
                 }
             }
             Ok(packet::header::PacketId::FinalClassification) => {
                 if amt >= std::mem::size_of::<packet::payload::final_classification::PacketFinalClassification>() {
                     let _final_classification: &packet::payload::final_classification::PacketFinalClassification =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::final_classification::PacketFinalClassification>()]);
-                    log::info!("Final classification packet received");
+                    log::debug!("final classification packet received");
                 }
             }
             Ok(packet::header::PacketId::LapData) => {
                 if amt >= std::mem::size_of::<packet::payload::lap::PacketLap>() {
                     let _lap: &packet::payload::lap::PacketLap =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::lap::PacketLap>()]);
-                    log::info!("Lap data packet received");
+                    log::debug!("lap data packet received");
                 }
-            }
-            Ok(packet::header::PacketId::LapHistory) => {
-                log::info!("Lap history packet received (placeholder - no struct defined)");
             }
             Ok(packet::header::PacketId::LapPositions) => {
                 if amt >= std::mem::size_of::<packet::payload::lap_positions::PacketLapPositions>() {
                     let _lap_positions: &packet::payload::lap_positions::PacketLapPositions =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::lap_positions::PacketLapPositions>()]);
-                    log::info!("Lap positions packet received");
+                    log::debug!("lap positions packet received");
                 }
             }
             Ok(packet::header::PacketId::LobbyInfo) => {
                 if amt >= std::mem::size_of::<packet::payload::lobby_info::PacketLobbyInfo>() {
                     let _lobby_info: &packet::payload::lobby_info::PacketLobbyInfo =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::lobby_info::PacketLobbyInfo>()]);
-                    log::info!("Lobby info packet received");
+                    log::debug!("lobby info packet received");
                 }
             }
             Ok(packet::header::PacketId::Motion) => {
                 if amt >= std::mem::size_of::<packet::payload::motion::PacketMotion>() {
-                    let motion: &packet::payload::motion::PacketMotion =
+                    let _motion: &packet::payload::motion::PacketMotion =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::motion::PacketMotion>()]);
-                    log::info!("Motion packet received");
+                    log::debug!("motion packet received");
                 }
             }
             Ok(packet::header::PacketId::MotionEx) => {
                 if amt >= std::mem::size_of::<packet::payload::motion_ex::PacketMotionEx>() {
                     let _motion_ex: &packet::payload::motion_ex::PacketMotionEx =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::motion_ex::PacketMotionEx>()]);
-                    log::info!("Motion Ex packet received");
+                    log::debug!("motion Ex packet received");
                 }
             }
             Ok(packet::header::PacketId::Participants) => {
                 if amt >= std::mem::size_of::<packet::payload::participants::PacketParticipants>() {
                     let _participants: &packet::payload::participants::PacketParticipants =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::participants::PacketParticipants>()]);
-                    log::info!("Participants packet received");
+                    log::debug!("participants packet received");
                 }
             }
             Ok(packet::header::PacketId::Session) => {
                 if amt >= std::mem::size_of::<packet::payload::session::PacketSession>() {
                     let _session: &packet::payload::session::PacketSession =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::session::PacketSession>()]);
-                    log::info!("Session packet received");
+                    log::debug!("session packet received");
                 }
             }
             Ok(packet::header::PacketId::SessionHistory) => {
                 if amt >= std::mem::size_of::<packet::payload::session_history::PacketSessionHistory>() {
                     let _session_history: &packet::payload::session_history::PacketSessionHistory =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::session_history::PacketSessionHistory>()]);
-                    log::info!("Session history packet received");
+                    log::debug!("session history packet received");
                 }
             }
             Ok(packet::header::PacketId::TimeTrial) => {
                 if amt >= std::mem::size_of::<packet::payload::time_trial::PacketTimeTrial>() {
                     let _time_trial: &packet::payload::time_trial::PacketTimeTrial =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::time_trial::PacketTimeTrial>()]);
-                    log::info!("Time trial packet received");
+                    log::debug!("time trial packet received");
                 }
             }
             Ok(packet::header::PacketId::TyreSets) => {
                 if amt >= std::mem::size_of::<packet::payload::tyre_sets::PacketTyreSets>() {
                     let _tyre_sets: &packet::payload::tyre_sets::PacketTyreSets =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::tyre_sets::PacketTyreSets>()]);
-                    log::info!("Tyre sets packet received");
+                    log::debug!("tyre sets packet received");
                 }
             }
             Err(_) => {
