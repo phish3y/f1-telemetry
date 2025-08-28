@@ -1,6 +1,7 @@
 use std::{net::UdpSocket, time::Duration};
 
 use rdkafka::{producer::FutureProducer, ClientConfig};
+use tokio::sync::mpsc;
 
 mod packet;
 
@@ -9,6 +10,8 @@ async fn main() {
     env_logger::init();
 
     let bootstrap_servers = std::env::var("KAFKA_BOOTSTRAP_SERVERS").unwrap();
+    let lap_topic = std::env::var("LAP_TOPIC").unwrap();
+
     let udp_url = std::env::var("UDP_URL").unwrap();
     let udp_port = std::env::var("UDP_PORT").unwrap();
 
@@ -16,7 +19,21 @@ async fn main() {
         .set("bootstrap.servers", &bootstrap_servers)
         .set("message.timeout.ms", "5000")
         .create()
-        .expect("Failed to create Kafka producer");
+        .unwrap();
+
+    let (tx, mut rx) = mpsc::channel::<(String, String, String)>(1000);
+    
+    tokio::spawn(async move {
+        while let Some((topic, key, payload)) = rx.recv().await {
+            let record = rdkafka::producer::FutureRecord::to(&topic)
+                .key(&key)
+                .payload(&payload);
+                
+            if let Err(e) = producer.send(record, Duration::from_secs(0)).await {
+                log::error!("Failed to send message to Kafka: {:?}", e);
+            }
+        }
+    });
  
     let socket = UdpSocket::bind(format!("{}:{}", udp_url, udp_port)).unwrap();
     socket.set_read_timeout(Some(Duration::from_secs(300))).unwrap();
@@ -74,11 +91,26 @@ async fn main() {
                     log::debug!("final classification packet received");
                 }
             }
-            Ok(packet::header::PacketId::LapData) => {
+            Ok(packet::header::PacketId::Lap) => {
                 if amt >= std::mem::size_of::<packet::payload::lap::PacketLap>() {
-                    let _lap: &packet::payload::lap::PacketLap =
+                    let lap_packet: &packet::payload::lap::PacketLap =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::lap::PacketLap>()]);
                     log::debug!("lap data packet received");
+
+                    match serde_json::to_string(&format!("{:?}", lap_packet)) {
+                        Ok(json_data) => {
+                            let session_uid = lap_packet.m_header.m_session_uid;
+                            let key = format!("session_{}", session_uid);
+                            
+                            // Send to channel instead of blocking on Kafka
+                            if let Err(e) = tx.try_send((lap_topic.clone(), key, json_data)) {
+                                log::warn!("Failed to queue lap data for Kafka: {:?}", e);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("failed to serialize lap data: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::LapPositions) => {

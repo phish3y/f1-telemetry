@@ -22,7 +22,7 @@ pub struct PacketHeader {
 pub enum PacketId {
     Motion = 0,
     Session = 1,
-    LapData = 2,
+    Lap = 2,
     Event = 3,
     Participants = 4,
     CarSetups = 5,
@@ -45,7 +45,7 @@ impl TryFrom<u8> for PacketId {
         match value {
             0 => Ok(PacketId::Motion),
             1 => Ok(PacketId::Session),
-            2 => Ok(PacketId::LapData),
+            2 => Ok(PacketId::Lap),
             3 => Ok(PacketId::Event),
             4 => Ok(PacketId::Participants),
             5 => Ok(PacketId::CarSetups),

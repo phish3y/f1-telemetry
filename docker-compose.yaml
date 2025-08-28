@@ -62,3 +62,4 @@ services:
       - UDP_URL=0.0.0.0
       - UDP_PORT=20777
       - KAFKA_BOOTSTRAP_SERVERS=broker:19092
+      - LAP_TOPIC=f1-telemetry-lap

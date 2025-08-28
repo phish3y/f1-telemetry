@@ -196,6 +196,7 @@ dependencies = [
  "env_logger",
  "log",
  "rdkafka",
+ "serde_json",
  "tokio",
 ]
 
