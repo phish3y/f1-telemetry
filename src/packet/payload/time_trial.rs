@@ -1,9 +1,10 @@
 use bytemuck::{Pod, Zeroable};
+use serde::Serialize;
 
 use crate::packet::header;
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct TimeTrialSet {
     pub m_car_idx: u8,
     pub m_team_id: u8,
@@ -20,7 +21,7 @@ pub struct TimeTrialSet {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct PacketTimeTrial {
     pub m_header: header::PacketHeader,
     pub m_player_session_best_data_set: TimeTrialSet,

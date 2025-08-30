@@ -1,9 +1,10 @@
 use bytemuck::{Pod, Zeroable};
+use serde::Serialize;
 
 use crate::packet::header;
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct CarMotion {
     pub m_world_position_x: f32,
     pub m_world_position_y: f32,
@@ -31,7 +32,7 @@ pub struct CarMotion {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct PacketMotion {
     pub m_header: header::PacketHeader,
     pub m_car_motion_data: [CarMotion; 22],

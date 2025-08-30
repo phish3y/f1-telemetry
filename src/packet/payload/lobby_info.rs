@@ -1,9 +1,10 @@
 use bytemuck::{Pod, Zeroable};
+use serde::Serialize;
 
 use crate::packet::header;
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct LobbyInfo {
     pub m_ai_controlled: u8,
     pub m_team_id: u8,
@@ -18,7 +19,7 @@ pub struct LobbyInfo {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct PacketLobbyInfo {
     pub m_header: header::PacketHeader,
     pub m_num_players: u8,

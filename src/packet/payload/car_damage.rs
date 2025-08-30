@@ -1,9 +1,10 @@
 use bytemuck::{Pod, Zeroable};
+use serde::Serialize;
 
 use crate::packet::header;
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct CarDamage {
     pub m_tyres_wear: [f32; 4],
     pub m_tyres_damage: [u8; 4],
@@ -30,7 +31,7 @@ pub struct CarDamage {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct PacketCarDamage {
     pub m_header: header::PacketHeader,
     pub m_car_damage_data: [CarDamage; 22],

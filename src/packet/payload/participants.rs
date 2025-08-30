@@ -1,9 +1,10 @@
 use bytemuck::{Pod, Zeroable};
+use serde::Serialize;
 
 use crate::packet::header;
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct LiveryColour {
     pub red: u8,
     pub green: u8,
@@ -11,7 +12,7 @@ pub struct LiveryColour {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct Participant {
     pub m_ai_controlled: u8,
     pub m_driver_id: u8,
@@ -30,7 +31,7 @@ pub struct Participant {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct PacketParticipants {
     pub m_header: header::PacketHeader,
     pub m_num_active_cars: u8,

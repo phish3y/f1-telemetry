@@ -1,9 +1,10 @@
 use bytemuck::{Pod, Zeroable};
+use serde::Serialize;
 
 use crate::packet::header;
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct Lap {
     pub m_last_lap_time_in_ms: u32,
     pub m_current_lap_time_in_ms: u32,
@@ -41,7 +42,7 @@ pub struct Lap {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct PacketLap {
     pub m_header: header::PacketHeader,
     pub m_lap_data: [Lap; 22],

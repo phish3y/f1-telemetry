@@ -1,16 +1,17 @@
 use bytemuck::{Pod, Zeroable};
+use serde::Serialize;
 
 use crate::packet::header;
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct MarshalZone {
     pub m_zone_start: f32,
     pub m_zone_flag: i8,
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct WeatherForecastSample {
     pub m_session_type: u8,
     pub m_time_offset: u8,
@@ -22,6 +23,7 @@ pub struct WeatherForecastSample {
     pub m_rain_percentage: u8,
 }
 
+// TODO serde
 #[repr(C, packed)]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub struct PacketSession {

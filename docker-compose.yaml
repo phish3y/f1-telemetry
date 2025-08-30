@@ -63,3 +63,4 @@ services:
       - UDP_PORT=20777
       - KAFKA_BOOTSTRAP_SERVERS=broker:19092
       - LAP_TOPIC=f1-telemetry-lap
+      - CAR_TELEMETRY_TOPIC=f1-telemetry-car-telemetry

@@ -23,6 +23,7 @@ pub struct TyreStintHistory {
     pub m_tyre_visual_compound: u8,
 }
 
+// TODO serde
 #[repr(C, packed)]
 #[derive(Clone, Copy, Debug)]
 pub struct PacketSessionHistory {

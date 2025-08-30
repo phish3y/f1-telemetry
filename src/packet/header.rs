@@ -1,7 +1,8 @@
 use bytemuck::{Pod, Zeroable};
+use serde::Serialize;
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct PacketHeader {
     pub m_packet_format: u16,
     pub m_game_year: u8,
@@ -18,7 +19,7 @@ pub struct PacketHeader {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub enum PacketId {
     Motion = 0,
     Session = 1,

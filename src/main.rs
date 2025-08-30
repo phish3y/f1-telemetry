@@ -11,9 +11,15 @@ async fn main() {
 
     let bootstrap_servers = std::env::var("KAFKA_BOOTSTRAP_SERVERS").unwrap();
     let lap_topic = std::env::var("LAP_TOPIC").unwrap();
+    let car_telemetry_topic = std::env::var("CAR_TELEMETRY_TOPIC").unwrap();
 
     let udp_url = std::env::var("UDP_URL").unwrap();
     let udp_port = std::env::var("UDP_PORT").unwrap();
+
+    let channel_size: usize = std::env::var("CHANNEL_SIZE")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(1000);
 
     let producer: FutureProducer = ClientConfig::new()
         .set("bootstrap.servers", &bootstrap_servers)
@@ -21,7 +27,7 @@ async fn main() {
         .create()
         .unwrap();
 
-    let (tx, mut rx) = mpsc::channel::<(String, String, String)>(1000);
+    let (tx, mut rx) = mpsc::channel::<(String, String, String)>(channel_size);
     
     tokio::spawn(async move {
         while let Some((topic, key, payload)) = rx.recv().await {
@@ -30,7 +36,7 @@ async fn main() {
                 .payload(&payload);
                 
             if let Err(e) = producer.send(record, Duration::from_secs(0)).await {
-                log::error!("Failed to send message to Kafka: {:?}", e);
+                log::error!("failed to send message to Kafka: {:?}", e);
             }
         }
     });
@@ -72,9 +78,23 @@ async fn main() {
             }
             Ok(packet::header::PacketId::CarTelemetry) => {
                 if amt >= std::mem::size_of::<packet::payload::car_telemetry::PacketCarTelemetry>() {
-                    let _telemetry: &packet::payload::car_telemetry::PacketCarTelemetry =
+                    let telemetry_packet: &packet::payload::car_telemetry::PacketCarTelemetry =
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::car_telemetry::PacketCarTelemetry>()]);
                     log::debug!("car telemetry packet received");
+
+                    match serde_json::to_string(telemetry_packet) {
+                        Ok(json_data) => {
+                            let session_uid = telemetry_packet.m_header.m_session_uid;
+                            let key = format!("session_{}", session_uid);
+                            
+                            if let Err(e) = tx.try_send((car_telemetry_topic.clone(), key, json_data)) {
+                                log::error!("failed to queue car telemetry data for Kafka: {:?}", e);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("failed to serialize car telemetry data: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::Event) => {
@@ -97,14 +117,13 @@ async fn main() {
                         bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::lap::PacketLap>()]);
                     log::debug!("lap data packet received");
 
-                    match serde_json::to_string(&format!("{:?}", lap_packet)) {
+                    match serde_json::to_string(lap_packet) {
                         Ok(json_data) => {
                             let session_uid = lap_packet.m_header.m_session_uid;
                             let key = format!("session_{}", session_uid);
                             
-                            // Send to channel instead of blocking on Kafka
                             if let Err(e) = tx.try_send((lap_topic.clone(), key, json_data)) {
-                                log::warn!("Failed to queue lap data for Kafka: {:?}", e);
+                                log::error!("failed to queue lap data for Kafka: {:?}", e);
                             }
                         }
                         Err(e) => {

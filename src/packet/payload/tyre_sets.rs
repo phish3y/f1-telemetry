@@ -1,9 +1,10 @@
 use bytemuck::{Pod, Zeroable};
+use serde::Serialize;
 
 use crate::packet::header;
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct TyreSet {
     pub m_actual_tyre_compound: u8,
     pub m_visual_tyre_compound: u8,
@@ -17,10 +18,10 @@ pub struct TyreSet {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod, Serialize)]
 pub struct PacketTyreSets {
     pub m_header: header::PacketHeader,
     pub m_car_idx: u8,
-    pub m_tyre_set_data: [TyreSet; 20], // 13 slick + 7 wet weather
+    pub m_tyre_set_data: [TyreSet; 20],
     pub m_fitted_idx: u8,
 }

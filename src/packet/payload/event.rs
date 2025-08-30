@@ -110,7 +110,7 @@ pub struct Collision {
     pub vehicle2_idx: u8,
 }
 
-// Union for event details - using the largest size for all variants
+// TODO serde
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub union EventDetails {
@@ -129,10 +129,9 @@ pub union EventDetails {
     pub overtake: Overtake,
     pub safety_car: SafetyCar,
     pub collision: Collision,
-    pub raw: [u8; 16], // Padding to ensure correct size
+    pub raw: [u8; 16],
 }
 
-// Manual implementation of Debug for the union
 impl std::fmt::Debug for EventDetails {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EventDetails").finish()
