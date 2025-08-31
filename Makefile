@@ -1,11 +1,17 @@
 .PHONY: fmt
 fmt:
-	cargo fmt
+	cd producer && cargo fmt
+	cd consumer && sbt scalafmtAll
 
 .PHONY: build
-build:
-	cargo build --release
+build: fmt
+	cd producer && cargo build --release
+	cd consumer && sbt package
 
-.PHONY: run
-run: fmt build
-	RUST_LOG=info cargo run --release
+.PHONY: up
+up:
+	docker compose up --build
+
+.PHONY: down
+down:
+	docker compose down
