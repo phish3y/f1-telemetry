@@ -30,7 +30,7 @@ services:
     healthcheck:
       test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka-broker:19092", "--list"]
       interval: 1s
-      timeout: 10s
+      timeout: 5s
       retries: 10
     networks:
       - f1-network
@@ -44,11 +44,6 @@ services:
     entrypoint: [ '/bin/sh', '-c' ]
     command: |
       "
-      until /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --list; do
-        echo 'waiting for Kafka to be ready...'
-        sleep 2
-      done
-
       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic f1-telemetry-lap --replication-factor 1 --partitions 2
       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic f1-telemetry-car-telemetry --replication-factor 1 --partitions 2
       "
@@ -56,36 +51,40 @@ services:
       - f1-network
 
   spark-master:
-    image: bitnami/spark:3.5.6
+    build:
+      context: spark
+      dockerfile: Dockerfile
     container_name: spark-master
     environment:
       - SPARK_MODE=master
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
-    ports:
-      - "8080:8080"
-      - "7077:7077" 
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_MASTER_HOST=spark-master
+    depends_on:
+      - kafka-broker
     networks:
       - f1-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
 
   spark-worker:
-    image: bitnami/spark:3.5.6
-    container_name: spark-worker
+    build:
+      context: spark
+      dockerfile: Dockerfile
+    depends_on:
+      - spark-master
+      - kafka-broker
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=1G
-      - SPARK_WORKER_CORES=1
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
-    depends_on:
-      - spark-master
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2g
     networks:
       - f1-network
+    deploy:
+      replicas: 1
 
   f1-telemetry-producer:
     container_name: f1-telemetry-producer
@@ -96,7 +95,7 @@ services:
       kafka-init:
         condition: service_completed_successfully
     environment:
-      - RUST_LOG=info
+      - RUST_LOG=debug
       - UDP_URL=0.0.0.0
       - UDP_PORT=20777
       - KAFKA_BOOTSTRAP_SERVERS=kafka-broker:19092
@@ -118,7 +117,7 @@ services:
       kafka-init:
         condition: service_completed_successfully
       spark-master:
-        condition: service_started
+        condition: service_healthy
     networks:
       - f1-network
 

@@ -5,8 +5,8 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.Encoders
 import org.apache.log4j.Logger
 import java.util.Properties
-import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.producer.ProducerRecord
+// import org.apache.kafka.clients.producer.KafkaProducer
+// import org.apache.kafka.clients.producer.ProducerRecord
 import java.time.format.DateTimeFormatter
 import scala.util.Random
 import java.time.Instant
@@ -19,9 +19,9 @@ import java.sql.Timestamp
 case class Kafka(
     key: Option[String],
     value: String,
-    headers: Option[Array[String]],
     topic: Option[String],
-    partition: Option[Int]
+    partition: Option[Int],
+    offset: Option[Long]
 )
 
 // case class F1TelemetryHeader(
@@ -78,9 +78,9 @@ object F1TelemetrySubscriber {
       .select(
         $"key".cast("string").as("key"),
         $"value".cast("string").as("value"),
-        $"headers".as("headers"),
         $"topic".as("topic"),
-        $"partition".as("partition")
+        $"partition".as("partition"),
+        $"offset".as("offset")
       )
       .as[Kafka]
 
