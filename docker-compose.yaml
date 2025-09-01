@@ -32,6 +32,8 @@ services:
       interval: 1s
       timeout: 5s
       retries: 10
+    ports:
+      - "19092:19092"
     networks:
       - f1-network
 
@@ -103,6 +105,8 @@ services:
       - CAR_TELEMETRY_TOPIC=f1-telemetry-car-telemetry
     networks:
       - f1-network
+    ports:
+      - "20777:20777/udp"  
 
   f1-telemetry-consumer:
     container_name: f1-telemetry-consumer
