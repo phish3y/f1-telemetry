@@ -116,7 +116,7 @@ services:
     environment:
       - KAFKA_BROKER=kafka-broker:19092
       - LAP_TOPIC=f1-telemetry-lap
-      # - SPARK_MASTER_URL=spark://spark-master:7077 TODO
+      - CAR_TELEMETRY_TOPIC=f1-telemetry-car-telemetry
     depends_on:
       kafka-init:
         condition: service_completed_successfully

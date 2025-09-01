@@ -5,8 +5,6 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.Encoders
 import org.apache.log4j.Logger
 import java.util.Properties
-// import org.apache.kafka.clients.producer.KafkaProducer
-// import org.apache.kafka.clients.producer.ProducerRecord
 import java.time.format.DateTimeFormatter
 import scala.util.Random
 import java.time.Instant
@@ -16,32 +14,90 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.databind.SerializationFeature
 import java.sql.Timestamp
 
-case class Kafka(
-    key: Option[String],
-    value: String,
-    topic: Option[String],
-    partition: Option[Int],
-    offset: Option[Long]
+case class Header(
+    m_packet_format: Int,
+    m_game_year: Int,
+    m_game_major_version: Int,
+    m_game_minor_version: Int,
+    m_packet_version: Int,
+    m_packet_id: Int,
+    m_session_uid: Long,
+    m_session_time: Float,
+    m_frame_identifier: Long,
+    m_overall_frame_identifier: Long,
+    m_player_car_index: Int,
+    m_secondary_player_car_index: Int
 )
 
-// case class F1TelemetryHeader(
-//     m_packet_format: Int,
-//     m_game_year: Int,
-//     m_game_major_version: Int,
-//     m_game_minor_version: Int,
-//     m_packet_version: Int,
-//     m_packet_id: Int,
-//     m_session_uid: Long,
-//     m_session_time: Float,
-//     m_frame_identifier: Long,
-//     m_overall_frame_identifier: Long,
-//     m_player_car_index: Int,
-//     m_secondary_player_car_index: Int
-// )
+case class Lap(
+    m_last_lap_time_in_ms: Long,
+    m_current_lap_time_in_ms: Long,
+    m_sector1_time_ms_part: Int,
+    m_sector1_time_minutes_part: Int,
+    m_sector2_time_ms_part: Int,
+    m_sector2_time_minutes_part: Int,
+    m_delta_to_car_in_front_ms_part: Int,
+    m_delta_to_car_in_front_minutes_part: Int,
+    m_delta_to_race_leader_ms_part: Int,
+    m_delta_to_race_leader_minutes_part: Int,
+    m_lap_distance: Float,
+    m_total_distance: Float,
+    m_safety_car_delta: Float,
+    m_car_position: Int,
+    m_current_lap_num: Int,
+    m_pit_status: Int,
+    m_num_pit_stops: Int,
+    m_sector: Int,
+    m_current_lap_invalid: Int,
+    m_penalties: Int,
+    m_total_warnings: Int,
+    m_corner_cutting_warnings: Int,
+    m_num_unserved_drive_through_pens: Int,
+    m_num_unserved_stop_go_pens: Int,
+    m_grid_position: Int,
+    m_driver_status: Int,
+    m_result_status: Int,
+    m_pit_lane_timer_active: Int,
+    m_pit_lane_time_in_lane_in_ms: Int,
+    m_pit_stop_timer_in_ms: Int,
+    m_pit_stop_should_serve_pen: Int,
+    m_speed_trap_fastest_speed: Float,
+    m_speed_trap_fastest_lap: Int
+)
 
-// case class F1CarTelemetry(
-//     m_header: F1TelemetryHeader,
-// )
+case class PacketLap(
+    m_header: Header,
+    m_lap_data: Array[Lap],
+    m_time_trial_pb_car_idx: Int,
+    m_time_trial_rival_car_idx: Int
+)
+
+case class CarTelemetry(
+    m_speed: Int,
+    m_throttle: Float,
+    m_steer: Float,
+    m_brake: Float,
+    m_clutch: Int,
+    m_gear: Int,
+    m_engine_rpm: Int,
+    m_drs: Int,
+    m_rev_lights_percent: Int,
+    m_rev_lights_bit_value: Int,
+    m_brakes_temperature: Array[Int],
+    m_tyres_surface_temperature: Array[Int],
+    m_tyres_inner_temperature: Array[Int],
+    m_engine_temperature: Int,
+    m_tyres_pressure: Array[Float],
+    m_surface_type: Array[Int]
+)
+
+case class PacketCarTelemetry(
+    m_header: Header,
+    m_car_telemetry_data: Array[CarTelemetry],
+    m_mfd_panel_index: Int,
+    m_mfd_panel_index_secondary_player: Int,
+    m_suggested_gear: Int
+)
 
 object F1TelemetrySubscriber {
 
@@ -56,6 +112,11 @@ object F1TelemetrySubscriber {
       case None => throw new IllegalArgumentException("LAP_TOPIC environment variable required")
     }
 
+    val carTelemetryTopic = sys.env.get("CAR_TELEMETRY_TOPIC") match {
+      case Some(broker) => broker
+      case None => throw new IllegalArgumentException("CAR_TELEMETRY_TOPIC environment variable required")
+    }
+
     val spark: SparkSession = SparkSession.builder
       .appName("f1-telemetry-subscriber")
       .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
@@ -67,65 +128,69 @@ object F1TelemetrySubscriber {
 
     import spark.implicits._
 
-    // val schema = Encoders.product[F1CarTelemetry].schema
+    // val lapSchema = Encoders.product[PacketLap].schema
 
-    // First, read the raw Kafka message with all metadata
-    val kafkaStream: Dataset[Kafka] = spark.readStream
+    // val lapStream: Dataset[PacketLap] = spark.readStream
+    //   .format("kafka")
+    //   .option("kafka.bootstrap.servers", kafkaBroker)
+    //   .option("subscribe", lapTopic)
+    //   .load()
+    //   .select(from_json($"value".cast("string"), lapSchema).as("data"))
+    //   .select($"data.*")
+    //   .as[PacketLap]
+
+    val carTelemetrySchema = Encoders.product[PacketCarTelemetry].schema
+
+    val carTelemetryStream: Dataset[PacketCarTelemetry] = spark.readStream
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
-      .option("subscribe", lapTopic)
+      .option("subscribe", carTelemetryTopic)
       .load()
+      .select(from_json($"value".cast("string"), carTelemetrySchema).as("data"))
+      .select($"data.*")
+      .as[PacketCarTelemetry]
+
+    val playerCarTelemetry = carTelemetryStream
+      .withColumn("timestamp", current_timestamp())
       .select(
-        $"key".cast("string").as("key"),
-        $"value".cast("string").as("value"),
-        $"topic".as("topic"),
-        $"partition".as("partition"),
-        $"offset".as("offset")
+        $"timestamp",
+        $"m_header.m_session_uid".as("session_uid"),
+        $"m_header.m_player_car_index".as("player_car_index"),
+        $"m_car_telemetry_data"($"m_header.m_player_car_index")("m_speed").as("speed")
       )
-      .as[Kafka]
 
-    // Then extract the event data from the value field
-    // val eventStream: Dataset[F1CarTelemetry] = kafkaStream
-    //   .select(from_json($"value", schema).as("data"))
-    //   .select($"data.*")
-    //   .as[F1CarTelemetry]
+    val speedAggregation = playerCarTelemetry
+      .withWatermark("timestamp", "10 seconds")
+      .groupBy(
+        window($"timestamp", "5 seconds"),
+        $"session_uid"
+      )
+      .agg(
+        avg($"speed").as("avg_speed"),
+        min($"speed").as("min_speed"),
+        max($"speed").as("max_speed"),
+        count("*").as("sample_count"),
+        first($"player_car_index").as("player_car_index")
+      )
+      .select(
+        $"window.start".as("window_start"),
+        $"window.end".as("window_end"),
+        $"session_uid",
+        $"player_car_index",
+        $"avg_speed",
+        $"min_speed", 
+        $"max_speed",
+        $"sample_count"
+      )
 
-    // Query to show raw Kafka messages with metadata
-    val kafkaQuery = kafkaStream.writeStream
+    val speedQuery = speedAggregation.writeStream
       .outputMode("append")
       .format("console")
       .option("truncate", "false")
-      .queryName("kafka-metadata")
-      .start()
+      .queryName("speed-aggregation")
+      .start() 
 
-    // val rawQuery = eventStream.writeStream
-    //   .outputMode("append")
-    //   .format("console")
-    //   .option("truncate", "false")
-    //   .queryName("raw")
-    //   .start()
-
-    // val windowAgg = eventStream
-    //   .withWatermark("timestamp", "5 seconds")
-    //   .groupBy(
-    //     window($"timestamp", "30 seconds"),
-    //     $"vehicle"
-    //   )
-    //   .agg(
-    //     count("*").as("count"),
-    //     avg($"speed").as("avg_speed")
-    //   )
-
-    // val aggQuery = windowAgg.writeStream
-    //   .outputMode("append")
-    //   .format("console")
-    //   .option("truncate", "false")
-    //   .queryName("windowAgg")
-    //   .start()
-
-    // rawQuery.awaitTermination()
-    kafkaQuery.awaitTermination()
-    // aggQuery.awaitTermination()
+    speedQuery.awaitTermination()
 
     spark.stop()
   }
