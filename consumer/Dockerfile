@@ -22,9 +22,9 @@ ADD https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.5.2/kafka-cl
 
 RUN chmod 644 $SPARK_HOME/jars/*.jar
 
-COPY --from=builder /app/target/scala-2.12/f1-telemetry-consumer_2.12-1.0.jar /opt/spark/f1-telemetry-consumer.jar
+COPY --from=builder /app/target/scala-2.12/consumer_2.12-1.0.jar /opt/spark/consumer.jar
 
 ENTRYPOINT ["spark-submit", \
-    "--class", "F1TelemetrySubscriber", \
+    "--class", "Consumer", \
     "--master", "spark://spark-master:7077", \
-    "/opt/spark/f1-telemetry-consumer.jar"]
+    "/opt/spark/consumer.jar"]

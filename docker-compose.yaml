@@ -32,8 +32,6 @@ services:
       interval: 1s
       timeout: 5s
       retries: 10
-    ports:
-      - "19092:19092"
     networks:
       - f1-network
 
@@ -48,6 +46,7 @@ services:
       "
       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic f1-telemetry-lap --replication-factor 1 --partitions 2
       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic f1-telemetry-car-telemetry --replication-factor 1 --partitions 2
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic speed-aggregation --replication-factor 1 --partitions 2
       "
     networks:
       - f1-network
@@ -75,6 +74,7 @@ services:
     build:
       context: spark
       dockerfile: Dockerfile
+    container_name: spark-worker
     depends_on:
       - spark-master
       - kafka-broker
@@ -88,8 +88,8 @@ services:
     deploy:
       replicas: 1
 
-  f1-telemetry-producer:
-    container_name: f1-telemetry-producer
+  producer:
+    container_name: producer
     build:
       context: producer
       dockerfile: Dockerfile
@@ -105,11 +105,9 @@ services:
       - CAR_TELEMETRY_TOPIC=f1-telemetry-car-telemetry
     networks:
       - f1-network
-    ports:
-      - "20777:20777/udp"  
 
-  f1-telemetry-consumer:
-    container_name: f1-telemetry-consumer
+  consumer:
+    container_name: consumer
     build:
       context: consumer
       dockerfile: Dockerfile
@@ -117,11 +115,44 @@ services:
       - KAFKA_BROKER=kafka-broker:19092
       - LAP_TOPIC=f1-telemetry-lap
       - CAR_TELEMETRY_TOPIC=f1-telemetry-car-telemetry
+      - SPEED_AGGREGATION_TOPIC=speed-aggregation
     depends_on:
       kafka-init:
         condition: service_completed_successfully
       spark-master:
         condition: service_healthy
+    networks:
+      - f1-network
+
+  socket:
+    container_name: socket
+    build:
+      context: socket
+      dockerfile: Dockerfile
+    environment:
+      - RUST_LOG=info
+      - KAFKA_BOOTSTRAP_SERVERS=kafka-broker:19092
+      - SPEED_AGGREGATION_TOPIC=speed-aggregation
+      - SOCKET_URL=0.0.0.0
+      - SOCKET_PORT=8080
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    networks:
+      - f1-network
+    # TODO
+    ports:
+      - "8080:8080"
+
+  nginx:
+    container_name: nginx
+    build:
+      context: web/f1-telemetry
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - socket
     networks:
       - f1-network
 

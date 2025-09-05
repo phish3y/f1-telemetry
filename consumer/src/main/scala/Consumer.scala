@@ -99,7 +99,17 @@ case class PacketCarTelemetry(
     m_suggested_gear: Int
 )
 
-object F1TelemetrySubscriber {
+case class SpeedAggregation(
+    window_start: java.sql.Timestamp,
+    window_end: java.sql.Timestamp,
+    session_uid: Long,
+    avg_speed: Double,
+    min_speed: Int,
+    max_speed: Int,
+    sample_count: Long
+)
+
+object Consumer {
 
   def main(args: Array[String]): Unit = {
     val kafkaBroker = sys.env.get("KAFKA_BROKER") match {
@@ -114,16 +124,24 @@ object F1TelemetrySubscriber {
 
     val carTelemetryTopic = sys.env.get("CAR_TELEMETRY_TOPIC") match {
       case Some(broker) => broker
-      case None => throw new IllegalArgumentException("CAR_TELEMETRY_TOPIC environment variable required")
+      case None =>
+        throw new IllegalArgumentException("CAR_TELEMETRY_TOPIC environment variable required")
+    }
+
+    val speedAggregationTopic = sys.env.get("SPEED_AGGREGATION_TOPIC") match {
+      case Some(topic) => topic
+      case None =>
+        throw new IllegalArgumentException("SPEED_AGGREGATION_TOPIC environment variable required")
     }
 
     val spark: SparkSession = SparkSession.builder
-      .appName("f1-telemetry-subscriber")
-      .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
-      .config(
-        "spark.hadoop.fs.s3a.aws.credentials.provider",
-        "com.amazonaws.auth.DefaultAWSCredentialsProviderChain"
-      )
+      .appName("f1-telemetry-consumer")
+      // .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+      // .config(
+      //   "spark.hadoop.fs.s3a.aws.credentials.provider",
+      //   "com.amazonaws.auth.DefaultAWSCredentialsProviderChain"
+      // )
+      .config("spark.sql.streaming.checkpointLocation", "/tmp/spark-checkpoints")
       .getOrCreate()
 
     import spark.implicits._
@@ -155,8 +173,7 @@ object F1TelemetrySubscriber {
       .select(
         $"timestamp",
         $"m_header.m_session_uid".as("session_uid"),
-        $"m_header.m_player_car_index".as("player_car_index"),
-        $"m_car_telemetry_data"($"m_header.m_player_car_index")("m_speed").as("speed")
+        $"m_car_telemetry_data" ($"m_header.m_player_car_index")("m_speed").as("speed")
       )
 
     val speedAggregation = playerCarTelemetry
@@ -169,28 +186,34 @@ object F1TelemetrySubscriber {
         avg($"speed").as("avg_speed"),
         min($"speed").as("min_speed"),
         max($"speed").as("max_speed"),
-        count("*").as("sample_count"),
-        first($"player_car_index").as("player_car_index")
+        count("*").as("sample_count")
       )
       .select(
         $"window.start".as("window_start"),
         $"window.end".as("window_end"),
         $"session_uid",
-        $"player_car_index",
         $"avg_speed",
-        $"min_speed", 
+        $"min_speed",
         $"max_speed",
         $"sample_count"
       )
+      .as[SpeedAggregation]
 
-    val speedQuery = speedAggregation.writeStream
+    val kafkaOutput = speedAggregation
+      .select(
+        $"session_uid".cast("string").as("key"),
+        to_json(struct($"*")).as("value")
+      )
+
+    val kafkaQuery = kafkaOutput.writeStream
+      .format("kafka")
+      .option("kafka.bootstrap.servers", kafkaBroker)
+      .option("topic", speedAggregationTopic)
       .outputMode("append")
-      .format("console")
-      .option("truncate", "false")
       .queryName("speed-aggregation")
-      .start() 
+      .start()
 
-    speedQuery.awaitTermination()
+    kafkaQuery.awaitTermination()
 
     spark.stop()
   }

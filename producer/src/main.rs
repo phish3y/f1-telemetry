@@ -41,13 +41,17 @@ async fn main() {
         }
     });
 
-    let socket = UdpSocket::bind(format!("{}:{}", udp_url, udp_port)).unwrap();
+    let socket = UdpSocket::bind(&format!("{}:{}", udp_url, udp_port)).unwrap();
     socket
         .set_read_timeout(Some(Duration::from_secs(300)))
         .unwrap();
 
     log::info!("recv from: {}:{}", udp_url, udp_port);
-    log::info!("publishing to: {}", &bootstrap_servers);
+    log::info!(
+        "publishing to: {}, {}",
+        &bootstrap_servers,
+        &car_telemetry_topic
+    );
 
     loop {
         let mut buf = [0u8; 2048];
