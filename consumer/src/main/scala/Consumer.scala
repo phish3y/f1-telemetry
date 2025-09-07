@@ -177,9 +177,9 @@ object Consumer {
       )
 
     val speedAggregation = playerCarTelemetry
-      .withWatermark("timestamp", "10 seconds")
+      .withWatermark("timestamp", "5 seconds")
       .groupBy(
-        window($"timestamp", "5 seconds"),
+        window($"timestamp", "3 seconds"),
         $"session_uid"
       )
       .agg(
