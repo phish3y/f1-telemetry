@@ -115,7 +115,7 @@ async fn consume(
     let consumer: StreamConsumer = ClientConfig::new()
         .set("group.id", "f1-socket-server")
         .set("bootstrap.servers", bootstrap_servers)
-        .set("auto.offset.reset", "latest")
+        .set("auto.offset.reset", "earliest")
         .create()
         .map_err(|e| KafkaConsumptionException::ConsumerCreationError(e.to_string()))?;
 
@@ -130,6 +130,7 @@ async fn consume(
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
             Ok(message) => {
+                log::info!("Received Kafka message from partition: {}, offset: {}", message.partition(), message.offset());
                 if let Some(payload) = message.payload_view::<str>() {
                     match payload {
                         Err(e) => {

@@ -27,6 +27,10 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-controller:9093
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
     healthcheck:
       test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka-broker:19092", "--list"]
       interval: 1s
@@ -132,7 +136,7 @@ services:
       context: socket
       dockerfile: Dockerfile
     environment:
-      - RUST_LOG=info
+      - RUST_LOG=debug
       - KAFKA_BOOTSTRAP_SERVERS=kafka-broker:19092
       - SPEED_AGGREGATION_TOPIC=speed-aggregation
       - SOCKET_URL=0.0.0.0

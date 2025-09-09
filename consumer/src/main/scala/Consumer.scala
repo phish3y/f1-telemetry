@@ -13,6 +13,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.databind.SerializationFeature
 import java.sql.Timestamp
+import org.apache.log4j.Level
+import org.apache.spark.sql.streaming.Trigger
 
 case class Header(
     m_packet_format: Int,
@@ -112,6 +114,8 @@ case class SpeedAggregation(
 object Consumer {
 
   def main(args: Array[String]): Unit = {
+    Logger.getLogger("org.apache.spark.scheduler.TaskSetManager").setLevel(Level.WARN)
+
     val kafkaBroker = sys.env.get("KAFKA_BROKER") match {
       case Some(broker) => broker
       case None => throw new IllegalArgumentException("KAFKA_BROKER environment variable required")
@@ -177,7 +181,7 @@ object Consumer {
       )
 
     val speedAggregation = playerCarTelemetry
-      .withWatermark("timestamp", "5 seconds")
+      .withWatermark("timestamp", "10 seconds")
       .groupBy(
         window($"timestamp", "3 seconds"),
         $"session_uid"
@@ -210,11 +214,38 @@ object Consumer {
       .option("kafka.bootstrap.servers", kafkaBroker)
       .option("topic", speedAggregationTopic)
       .outputMode("append")
-      .queryName("speed-aggregation")
+      // .trigger(Trigger.ProcessingTime("5 seconds"))
+      // .queryName("speed-aggregation")
       .start()
+
+    // val kafkaQuery = kafkaOutput.writeStream
+    //   .format("kafka")
+    //   .option("kafka.bootstrap.servers", kafkaBroker)
+    //   .option("topic", speedAggregationTopic)
+    //   .outputMode("append")
+    //   .trigger(Trigger.ProcessingTime("5 seconds"))
+    //   .queryName("speed-aggregation")
+    //   .foreachBatch { (batchDF: Dataset[Row], batchId: Long) =>
+    //     try {
+    //       println(s"Attempting to write batch $batchId to Kafka")
+    //       batchDF.write
+    //         .format("kafka")
+    //         .option("kafka.bootstrap.servers", kafkaBroker)
+    //         .option("topic", speedAggregationTopic)
+    //         .save()
+    //       println(s"Successfully wrote ${batchDF.count()} records to Kafka")
+    //     } catch {
+    //       case e: Exception => 
+    //         println(s"Failed to write to Kafka: ${e.getMessage}")
+    //         e.printStackTrace()
+    //     }
+    //   }
+    //   .start()
 
     kafkaQuery.awaitTermination()
 
     spark.stop()
   }
 }
+
+// /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:19092 --topic speed-aggregation --from-beginning
