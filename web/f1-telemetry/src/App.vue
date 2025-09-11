@@ -1,174 +1,49 @@
 <template>
   <div class="telemetry-dashboard">
-    <h1>🏎️ F1 Telemetry Dashboard</h1>
-
-    <!-- Connection Status -->
-    <div class="connection-status">
-      <div :class="['status-indicator', isConnected ? 'connected' : 'disconnected']">
-        {{ isConnected ? '🟢 Connected' : '🔴 Disconnected' }}
-      </div>
-      <div v-if="connectionError" class="error-message">⚠️ {{ connectionError }}</div>
-    </div>
-
-    <!-- Speed Data Display -->
-    <div v-if="latestSpeedData" class="speed-data">
-      <h2>Latest Speed Data</h2>
-      <div class="metrics-grid">
-        <div class="metric-card">
-          <div class="metric-value">{{ latestSpeedData.avg_speed.toFixed(1) }}</div>
-          <div class="metric-label">Average Speed (km/h)</div>
+    <div class="title-bar">
+      <div class="title-text">F1 Telemetry Monitor</div>
+      <div class="title-right">
+        <div :class="['connection-status', isConnected ? 'connected' : 'disconnected']">
+          {{ isConnected ? 'Connected' : 'Disconnected' }}
         </div>
-        <div class="metric-card">
-          <div class="metric-value">{{ latestSpeedData.max_speed }}</div>
-          <div class="metric-label">Max Speed (km/h)</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-value">{{ latestSpeedData.min_speed }}</div>
-          <div class="metric-label">Min Speed (km/h)</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-value">{{ latestSpeedData.sample_count }}</div>
-          <div class="metric-label">Samples</div>
-        </div>
-      </div>
-
-      <div class="session-info">
-        <p><strong>Session:</strong> {{ latestSpeedData.session_uid }}</p>
-        <p>
-          <strong>Window:</strong>
-          {{ new Date(latestSpeedData.window_start).toLocaleTimeString() }} -
-          {{ new Date(latestSpeedData.window_end).toLocaleTimeString() }}
-        </p>
       </div>
     </div>
 
-    <div v-else-if="isConnected" class="waiting-message">🔄 Waiting for telemetry data...</div>
+    <div class="main-content">
+      <div class="charts-container">
+        <SpeedChart :latest-speed-data="latestSpeedData" />
+        <!-- Future charts will go here -->
+      </div>
+    </div>
   </div>
 </template>
 
-<style scoped>
-.telemetry-dashboard {
-  padding: 20px;
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  background: linear-gradient(135deg, #1e3c72, #2a5298);
-  min-height: 100vh;
-  color: white;
-}
-
-h1 {
-  text-align: center;
-  margin-bottom: 30px;
-  font-size: 2.5em;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.connection-status {
-  text-align: center;
-  margin-bottom: 30px;
-}
-
-.status-indicator {
-  display: inline-block;
-  padding: 10px 20px;
-  border-radius: 25px;
-  font-weight: bold;
-  margin-bottom: 10px;
-}
-
-.connected {
-  background-color: rgba(40, 167, 69, 0.2);
-  border: 2px solid #28a745;
-}
-
-.disconnected {
-  background-color: rgba(220, 53, 69, 0.2);
-  border: 2px solid #dc3545;
-}
-
-.error-message {
-  color: #ff6b6b;
-  font-weight: bold;
-}
-
-.speed-data {
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.speed-data h2 {
-  text-align: center;
-  margin-bottom: 20px;
-}
-
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
-}
-
-.metric-card {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border-radius: 15px;
-  padding: 20px;
-  text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.metric-value {
-  font-size: 2em;
-  font-weight: bold;
-  color: #00d4ff;
-  margin-bottom: 5px;
-}
-
-.metric-label {
-  font-size: 0.9em;
-  opacity: 0.8;
-}
-
-.session-info {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  padding: 20px;
-  margin-top: 20px;
-}
-
-.waiting-message {
-  text-align: center;
-  font-size: 1.2em;
-  margin-top: 50px;
-  opacity: 0.8;
-}
-</style>
-
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import SpeedChart from './components/SpeedChart.vue'
 
 interface SpeedAggregation {
   window_start: string
   window_end: string
   session_uid: number
+  car_index: number
   avg_speed: number
   min_speed: number
   max_speed: number
-  sample_count: number
+  sample_count?: number
 }
 
 let websocket: WebSocket | null = null
 
 const isConnected = ref(false)
 const connectionError = ref<string | null>(null)
-
 const latestSpeedData = ref<SpeedAggregation | null>(null)
 
 const connectWebSocket = () => {
   try {
-    websocket = new WebSocket(`ws://${window.location.host}:8080`) // TODO
+    websocket = new WebSocket(`ws://${window.location.host}:8080`)
 
     websocket.onopen = () => {
-      console.log('connected to F1 telemetry socket')
       isConnected.value = true
       connectionError.value = null
     }
@@ -176,13 +51,12 @@ const connectWebSocket = () => {
     websocket.onmessage = (event) => {
       try {
         const rawData = JSON.parse(event.data)
-        console.log('Received telemetry data:', rawData)
 
-        // Parse into SpeedAggregation interface
         const speedData: SpeedAggregation = {
           window_start: rawData.window_start,
           window_end: rawData.window_end,
           session_uid: rawData.session_uid,
+          car_index: rawData.car_index,
           avg_speed: rawData.avg_speed,
           min_speed: rawData.min_speed,
           max_speed: rawData.max_speed,
@@ -196,12 +70,10 @@ const connectWebSocket = () => {
       }
     }
 
-    websocket.onclose = (event) => {
-      console.log('socket connection closed:', event.code, event.reason)
+    websocket.onclose = () => {
       isConnected.value = false
 
       setTimeout(() => {
-        console.log('attempting to reconnect...')
         connectWebSocket()
       }, 3000)
     }
@@ -232,3 +104,133 @@ onUnmounted(() => {
   disconnectWebSocket()
 })
 </script>
+
+<style scoped>
+.telemetry-dashboard {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #c0c0c0 0%, #808080 100%);
+  font-family: 'Geneva', 'Tahoma', sans-serif;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+}
+
+.title-bar {
+  background: linear-gradient(180deg, #0080ff 0%, #0060df 100%);
+  color: white;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: bold;
+  font-size: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.title-text {
+  font-size: 12px;
+}
+
+.title-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.connection-status {
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.connection-status.connected {
+  color: #90EE90;
+}
+
+.connection-status.disconnected {
+  color: #FFB6C1;
+}
+
+.title-version {
+  font-size: 10px;
+  opacity: 0.9;
+}
+
+.main-content {
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.charts-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: flex-start;
+}
+
+.charts-container > * {
+  flex: 1;
+  min-width: 300px;
+  max-width: calc(50% - 8px);
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.metric-item {
+  text-align: center;
+}
+
+.metric-label {
+  font-size: 10px;
+  color: #666666;
+  margin-bottom: 4px;
+}
+
+.metric-value {
+  font-size: 14px;
+  font-weight: bold;
+  color: #000080;
+}
+
+.waiting-text {
+  text-align: center;
+  color: #666666;
+  font-style: italic;
+}
+
+.status-bar {
+  background: linear-gradient(180deg, #dfdfdf 0%, #c0c0c0 100%);
+  border-top: 1px solid #808080;
+  padding: 4px 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #333333;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .charts-container {
+    gap: 8px;
+  }
+
+  .charts-container > * {
+    max-width: 100%;
+    min-width: 280px;
+  }
+}
+</style>

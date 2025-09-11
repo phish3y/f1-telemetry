@@ -42,9 +42,6 @@ async fn main() {
     });
 
     let socket = UdpSocket::bind(&format!("{}:{}", udp_url, udp_port)).unwrap();
-    socket
-        .set_read_timeout(Some(Duration::from_secs(300)))
-        .unwrap();
 
     log::info!("recv from: {}:{}", udp_url, udp_port);
     log::info!(
