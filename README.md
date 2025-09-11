@@ -5,13 +5,13 @@ F1 Telemetry is a comprehensive streaming data platform that captures, processes
 ## Architecture
 
 ```mermaid
-graph LR
-    A[F1 2025 Game] -->|UDP Packets| B[Rust Producer]
-    B -->|JSON Messages| C[Apache Kafka]
-    C -->|Streaming| D[Spark Consumer]
-    D -->|Aggregated Data| E[Kafka Topics]
-    E -->|WebSocket| F[Rust WebSocket Server]
-    F -->|Real-time Data| G[Vue.js Frontend]
+graph TD
+    A[F1 Game] -->|UDP| B[Producer]
+    B -->|JSON| C[Kafka]
+    C --> D[Spark]
+    D --> E[Kafka]
+    E -->|WS| F[Socket]
+    F --> G[Web UI]
     
     style A fill:#ff6b35
     style B fill:#f39c12
