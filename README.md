@@ -75,7 +75,6 @@ graph TD
 ### 4. **Web Visualization** (`web/`)
 - Vue.js 3 application with Chart.js integration
 - Real-time telemetry charts with scrolling time-based visualization  
-- Minimalistic 90's Windows aesthetic
 - Responsive design supporting multiple chart layouts
 
 ## Development Setup
