@@ -2,26 +2,6 @@
 
 F1 Telemetry is a comprehensive streaming data platform that captures, processes, and visualizes Formula 1 game telemetry data in real-time. The system provides windowed telemetry aggregations with interactive charts, perfect for analyzing racing performance and telemetry patterns.
 
-## Architecture
-
-```mermaid
-graph TD
-    A[F1 Game] -->|UDP| B[Producer]
-    B -->|JSON| C[Kafka]
-    C --> D[Spark]
-    D --> E[Kafka]
-    E -->|WS| F[Socket]
-    F --> G[Web UI]
-    
-    style A fill:#ff6b35
-    style B fill:#f39c12
-    style C fill:#3498db
-    style D fill:#e74c3c
-    style E fill:#3498db
-    style F fill:#f39c12
-    style G fill:#2ecc71
-```
-
 ### Technology Stack
 
 | Component | Technology | Purpose |
@@ -56,7 +36,25 @@ make up
 Open your browser and navigate to:
 - **Web Dashboard**: http://localhost:80
 
-## Data Flow
+## Architecture
+
+```mermaid
+graph TD
+    A[F1 Game] --> B[Producer]
+    B --> C[Kafka]
+    C --> D[Spark]
+    D --> E[Kafka]
+    E --> F[Socket]
+    F --> G[Web UI]
+    
+    style A fill:#ff6b35
+    style B fill:#f39c12
+    style C fill:#3498db
+    style D fill:#e74c3c
+    style E fill:#3498db
+    style F fill:#f39c12
+    style G fill:#2ecc71
+```
 
 ### 1. **UDP Ingestion** (`producer/`)
 - Listens on port `20777` for F1 2025 telemetry packets
