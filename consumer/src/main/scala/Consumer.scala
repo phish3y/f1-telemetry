@@ -19,6 +19,7 @@ import org.apache.spark.sql.streaming.Trigger
 import packet.Header
 import packet.payload.{Lap, PacketLap, CarTelemetry, PacketCarTelemetry}
 import aggregation.SpeedAggregation
+import aggregation.RPMAggregation
 
 object Consumer {
 
@@ -30,10 +31,10 @@ object Consumer {
       case None => throw new IllegalArgumentException("KAFKA_BROKER environment variable required")
     }
 
-    val lapTopic = sys.env.get("LAP_TOPIC") match {
-      case Some(broker) => broker
-      case None => throw new IllegalArgumentException("LAP_TOPIC environment variable required")
-    }
+    // val lapTopic = sys.env.get("LAP_TOPIC") match {
+    //   case Some(broker) => broker
+    //   case None => throw new IllegalArgumentException("LAP_TOPIC environment variable required")
+    // }
 
     val carTelemetryTopic = sys.env.get("CAR_TELEMETRY_TOPIC") match {
       case Some(broker) => broker
@@ -45,6 +46,12 @@ object Consumer {
       case Some(topic) => topic
       case None =>
         throw new IllegalArgumentException("SPEED_AGGREGATION_TOPIC environment variable required")
+    }
+
+    val rpmAggregationTopic = sys.env.get("RPM_AGGREGATION_TOPIC") match {
+      case Some(topic) => topic
+      case None =>
+        throw new IllegalArgumentException("RPM_AGGREGATION_TOPIC environment variable required")
     }
 
     implicit val spark: SparkSession = SparkSession.builder
@@ -73,6 +80,19 @@ object Consumer {
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
       .option("topic", speedAggregationTopic)
+      .outputMode("append")
+      .start()
+      .awaitTermination()
+
+    RPMAggregation.calculate(carTelemetryStream)
+      .select(
+        $"session_uid".cast("string").as("key"),
+        to_json(struct($"*")).as("value")
+      )
+      .writeStream
+      .format("kafka")
+      .option("kafka.bootstrap.servers", kafkaBroker)
+      .option("topic", rpmAggregationTopic)
       .outputMode("append")
       .start()
       .awaitTermination()

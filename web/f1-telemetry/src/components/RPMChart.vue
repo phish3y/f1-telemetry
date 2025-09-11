@@ -1,8 +1,8 @@
 <template>
-  <div class="speed-chart-container">
+  <div class="rpm-chart-container">
     <div class="window-header">
       <span class="window-title">
-        Speed Analysis{{ currentSessionId ? ` for Session ${currentSessionId}` : '' }}
+        RPM Analysis{{ currentSessionId ? ` for Session ${currentSessionId}` : '' }}
       </span>
     </div>
     <div class="chart-content">
@@ -43,37 +43,37 @@ ChartJS.register(
   TimeScale
 )
 
-interface SpeedAggregation {
+interface RPMAggregation {
   window_start: string
   window_end: string
   session_uid: number
-  avg_speed: number
-  min_speed: number
-  max_speed: number
+  avg_rpm: number
+  min_rpm: number
+  max_rpm: number
   sample_count: number
 }
 
 const props = defineProps<{
-  latestSpeedData: SpeedAggregation | null
+  latestRpmData: RPMAggregation | null
 }>()
 
-const speedDataHistory = ref<SpeedAggregation[]>([])
+const rpmDataHistory = ref<RPMAggregation[]>([])
 
 watch(
-  () => props.latestSpeedData,
+  () => props.latestRpmData,
   (newData) => {
     if (newData) {
-      speedDataHistory.value.push(newData)
-      if (speedDataHistory.value.length > 50) {
-        speedDataHistory.value.shift()
+      rpmDataHistory.value.push(newData)
+      if (rpmDataHistory.value.length > 50) {
+        rpmDataHistory.value.shift()
       }
     }
   }
 )
 
 const currentSessionId = computed(() => {
-  if (speedDataHistory.value.length > 0) {
-    return speedDataHistory.value[speedDataHistory.value.length - 1].session_uid
+  if (rpmDataHistory.value.length > 0) {
+    return rpmDataHistory.value[rpmDataHistory.value.length - 1].session_uid
   }
   return null
 })
@@ -81,15 +81,15 @@ const currentSessionId = computed(() => {
 const maxDataPoints = 20
 
 const chartData = computed(() => {
-  const recentData = speedDataHistory.value.slice(-maxDataPoints)
+  const recentData = rpmDataHistory.value.slice(-maxDataPoints)
 
   return {
     datasets: [
       {
-        label: 'Min Speed',
+        label: 'Min RPM',
         data: recentData.map(point => ({
           x: new Date(point.window_start).getTime(),
-          y: point.min_speed
+          y: point.min_rpm
         })),
         borderColor: '#6b46c1',
         backgroundColor: 'rgba(107, 70, 193, 0.1)',
@@ -103,10 +103,10 @@ const chartData = computed(() => {
         borderWidth: 2
       },
       {
-        label: 'Avg Speed',
+        label: 'Avg RPM',
         data: recentData.map(point => ({
           x: new Date(point.window_start).getTime(),
-          y: point.avg_speed
+          y: point.avg_rpm
         })),
         borderColor: '#059669',
         backgroundColor: 'rgba(5, 150, 105, 0.1)',
@@ -120,10 +120,10 @@ const chartData = computed(() => {
         borderWidth: 2
       },
       {
-        label: 'Max Speed',
+        label: 'Max RPM',
         data: recentData.map(point => ({
           x: new Date(point.window_start).getTime(),
-          y: point.max_speed
+          y: point.max_rpm
         })),
         borderColor: '#dc2626',
         backgroundColor: 'rgba(220, 38, 38, 0.1)',
@@ -213,8 +213,8 @@ const chartOptions = computed(() => {
           },
           unit: 'second' as const
         },
-        min: speedDataHistory.value.length > 0 ?
-          Math.max(now - timeWindow, new Date(speedDataHistory.value[Math.max(0, speedDataHistory.value.length - maxDataPoints)]?.window_start || now).getTime()) :
+        min: rpmDataHistory.value.length > 0 ?
+          Math.max(now - timeWindow, new Date(rpmDataHistory.value[Math.max(0, rpmDataHistory.value.length - maxDataPoints)]?.window_start || now).getTime()) :
           now - timeWindow,
         max: now + 5000,
         title: {
@@ -248,7 +248,7 @@ const chartOptions = computed(() => {
         beginAtZero: false,
         title: {
           display: true,
-          text: 'Speed (km/h)',
+          text: 'RPM',
           color: '#666666',
           font: {
             family: 'Geneva, Tahoma, sans-serif',
@@ -278,7 +278,7 @@ const chartOptions = computed(() => {
 </script>
 
 <style scoped>
-.speed-chart-container {
+.rpm-chart-container {
   background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
   border: 2px outset #c0c0c0;
   margin-bottom: 20px;

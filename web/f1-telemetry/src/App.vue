@@ -12,6 +12,7 @@
     <div class="main-content">
       <div class="charts-container">
         <SpeedChart :latest-speed-data="latestSpeedData" />
+        <!-- <RPMChart :latest-rpm-data="" /> -->
         <!-- Future charts will go here -->
       </div>
     </div>
@@ -21,23 +22,35 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import SpeedChart from './components/SpeedChart.vue'
+// import RPMChart from './components/RPMChart.vue'
 
 interface SpeedAggregation {
   window_start: string
   window_end: string
   session_uid: number
-  car_index: number
   avg_speed: number
   min_speed: number
   max_speed: number
-  sample_count?: number
+  sample_count: number
 }
+
+// interface RPMAggregation {
+//   window_start: string
+//   window_end: string
+//   session_uid: number
+//   avg_rpm: number
+//   min_rpm: number
+//   max_rpm: number
+//   sample_count: number
+// }
 
 let websocket: WebSocket | null = null
 
 const isConnected = ref(false)
 const connectionError = ref<string | null>(null)
+
 const latestSpeedData = ref<SpeedAggregation | null>(null)
+// TODO const latestRpmData = ref<RPMAggregation | null>(null)
 
 const connectWebSocket = () => {
   try {
@@ -56,7 +69,6 @@ const connectWebSocket = () => {
           window_start: rawData.window_start,
           window_end: rawData.window_end,
           session_uid: rawData.session_uid,
-          car_index: rawData.car_index,
           avg_speed: rawData.avg_speed,
           min_speed: rawData.min_speed,
           max_speed: rawData.max_speed,
