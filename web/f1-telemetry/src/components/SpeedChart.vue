@@ -31,6 +31,7 @@ import {
   type TooltipItem
 } from 'chart.js'
 import 'chartjs-adapter-date-fns'
+import type { SpeedAggregation } from '../types/aggregations'
 
 ChartJS.register(
   CategoryScale,
@@ -42,16 +43,6 @@ ChartJS.register(
   Legend,
   TimeScale
 )
-
-interface SpeedAggregation {
-  window_start: string
-  window_end: string
-  session_uid: number
-  avg_speed: number
-  min_speed: number
-  max_speed: number
-  sample_count: number
-}
 
 const props = defineProps<{
   latestSpeedData: SpeedAggregation | null

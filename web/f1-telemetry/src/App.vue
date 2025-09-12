@@ -12,7 +12,7 @@
     <div class="main-content">
       <div class="charts-container">
         <SpeedChart :latest-speed-data="latestSpeedData" />
-        <!-- <RPMChart :latest-rpm-data="" /> -->
+        <RPMChart :latest-rpm-data="latestRpmData" />
         <!-- Future charts will go here -->
       </div>
     </div>
@@ -22,27 +22,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import SpeedChart from './components/SpeedChart.vue'
-// import RPMChart from './components/RPMChart.vue'
-
-interface SpeedAggregation {
-  window_start: string
-  window_end: string
-  session_uid: number
-  avg_speed: number
-  min_speed: number
-  max_speed: number
-  sample_count: number
-}
-
-// interface RPMAggregation {
-//   window_start: string
-//   window_end: string
-//   session_uid: number
-//   avg_rpm: number
-//   min_rpm: number
-//   max_rpm: number
-//   sample_count: number
-// }
+import RPMChart from './components/RPMChart.vue'
+import type { SpeedAggregation, RPMAggregation, SocketMessage } from './types/aggregations'
 
 let websocket: WebSocket | null = null
 
@@ -50,7 +31,7 @@ const isConnected = ref(false)
 const connectionError = ref<string | null>(null)
 
 const latestSpeedData = ref<SpeedAggregation | null>(null)
-// TODO const latestRpmData = ref<RPMAggregation | null>(null)
+const latestRpmData = ref<RPMAggregation | null>(null)
 
 const connectWebSocket = () => {
   try {
@@ -63,19 +44,13 @@ const connectWebSocket = () => {
 
     websocket.onmessage = (event) => {
       try {
-        const rawData = JSON.parse(event.data)
+        const message: SocketMessage = JSON.parse(event.data)
 
-        const speedData: SpeedAggregation = {
-          window_start: rawData.window_start,
-          window_end: rawData.window_end,
-          session_uid: rawData.session_uid,
-          avg_speed: rawData.avg_speed,
-          min_speed: rawData.min_speed,
-          max_speed: rawData.max_speed,
-          sample_count: rawData.sample_count,
+        if (message.type === 'speed') {
+          latestSpeedData.value = message.data as SpeedAggregation
+        } else if (message.type === 'rpm') {
+          latestRpmData.value = message.data as RPMAggregation
         }
-
-        latestSpeedData.value = speedData
       } catch (error) {
         console.error('failed to parse telemetry data:', error)
         connectionError.value = 'failed to parse telemetry data'

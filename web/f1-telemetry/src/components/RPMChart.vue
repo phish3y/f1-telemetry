@@ -31,6 +31,7 @@ import {
   type TooltipItem
 } from 'chart.js'
 import 'chartjs-adapter-date-fns'
+import type { RPMAggregation } from '../types/aggregations'
 
 ChartJS.register(
   CategoryScale,
@@ -42,16 +43,6 @@ ChartJS.register(
   Legend,
   TimeScale
 )
-
-interface RPMAggregation {
-  window_start: string
-  window_end: string
-  session_uid: number
-  avg_rpm: number
-  min_rpm: number
-  max_rpm: number
-  sample_count: number
-}
 
 const props = defineProps<{
   latestRpmData: RPMAggregation | null

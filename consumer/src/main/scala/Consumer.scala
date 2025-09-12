@@ -80,9 +80,10 @@ object Consumer {
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
       .option("topic", speedAggregationTopic)
+      .option("checkpointLocation", "/tmp/spark-checkpoints/speed")
       .outputMode("append")
       .start()
-      .awaitTermination()
+      // TODO no await?
 
     RPMAggregation.calculate(carTelemetryStream)
       .select(
@@ -93,6 +94,7 @@ object Consumer {
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
       .option("topic", rpmAggregationTopic)
+      .option("checkpointLocation", "/tmp/spark-checkpoints/rpm")
       .outputMode("append")
       .start()
       .awaitTermination()

@@ -5,7 +5,6 @@ use rdkafka::{
     ClientConfig, Message,
     consumer::{Consumer, StreamConsumer},
 };
-use serde::{Deserialize, Serialize};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::{RwLock, broadcast},
@@ -16,16 +15,10 @@ use tokio_tungstenite::{
 };
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct SpeedAggregation {
-    window_start: String,
-    window_end: String,
-    session_uid: i64,
-    avg_speed: f64,
-    min_speed: i32,
-    max_speed: i32,
-    sample_count: i64,
-}
+use crate::{aggregation::{rpm_aggregation::RPMAggregation, speed_aggregation::SpeedAggregation}, socket_message::SocketMessage};
+
+mod aggregation;
+mod socket_message;
 
 type Clients = Arc<RwLock<HashMap<Uuid, broadcast::Sender<String>>>>;
 
@@ -37,6 +30,8 @@ async fn main() {
         .expect("KAFKA_BOOTSTRAP_SERVERS environment variable required");
     let speed_aggregation_topic = std::env::var("SPEED_AGGREGATION_TOPIC")
         .expect("SPEED_AGGREGATION_TOPIC environment variable required");
+    let rpm_aggregation_topic = std::env::var("RPM_AGGREGATION_TOPIC")
+        .expect("RPM_AGGREGATION_TOPIC environment variable required");
 
     let socket_url = std::env::var("SOCKET_URL").unwrap();
     let socket_port = std::env::var("SOCKET_PORT").unwrap();
@@ -47,9 +42,23 @@ async fn main() {
 
     let bsc = bootstrap_servers.clone();
     let satc = speed_aggregation_topic.clone();
-    let cc = connections.clone();
+    let ratc = rpm_aggregation_topic.clone();
     let txc = tx.clone();
-    let consume_handle = tokio::spawn(async move { consume(&bsc, &satc, cc, txc).await });
+    let consume_handle = tokio::spawn(async move { 
+        let speed_task = consume_speed(&bsc, &satc, txc.clone());
+        let rpm_task = consume_rpm(&bsc, &ratc, txc.clone());
+        
+        tokio::select! {
+            result = speed_task => {
+                log::error!("speed consumer terminated: {:?}", result);
+                result
+            }
+            result = rpm_task => {
+                log::error!("rpm consumer terminated: {:?}", result);
+                result
+            }
+        }
+    });
 
     let listener = TcpListener::bind(&format!("{}:{}", socket_url, socket_port))
         .await
@@ -71,9 +80,10 @@ async fn main() {
 
     log::info!("socket accepting on {}:{}", socket_url, socket_port);
     log::info!(
-        "subscribed to: {}, {}",
+        "subscribed to: {}, {} and {}",
         &bootstrap_servers,
-        &speed_aggregation_topic
+        &speed_aggregation_topic,
+        &rpm_aggregation_topic
     );
 
     tokio::select! {
@@ -106,14 +116,13 @@ async fn main() {
     }
 }
 
-async fn consume(
+async fn consume_speed(
     bootstrap_servers: &str,
     topic: &str,
-    connections: Clients,
     broadcast_tx: broadcast::Sender<String>,
 ) -> Result<(), KafkaConsumptionException> {
     let consumer: StreamConsumer = ClientConfig::new()
-        .set("group.id", "f1-socket-server")
+        .set("group.id", "f1-socket-server-speed")
         .set("bootstrap.servers", bootstrap_servers)
         .set("auto.offset.reset", "earliest")
         .create()
@@ -126,34 +135,97 @@ async fn consume(
     loop {
         match consumer.recv().await {
             Err(e) => {
-                log::error!("failed to recv from Kafka consumer consumer: {}", e);
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                log::error!("speed consumer error: {}", e);
+                tokio::time::sleep(Duration::from_millis(100)).await;
             }
             Ok(message) => {
-                log::info!("Received Kafka message from partition: {}, offset: {}", message.partition(), message.offset());
-                if let Some(payload) = message.payload_view::<str>() {
-                    match payload {
+                if let Some(payload) = message.payload() {
+                    match std::str::from_utf8(payload) {
                         Err(e) => {
-                            log::error!("failed to parse Kafka message: {}", e);
+                            log::error!("failed to decode speed message payload as UTF-8: {}", e);
                         }
-                        Ok(json_str) => {
-                            log::debug!("received message: {}", json_str);
-
-                            if let Err(e) = broadcast_tx.send(json_str.to_string()) {
-                                log::error!("failed to broadcast message: {}", e);
-                            }
-
-                            let mut conn_guard = connections.write().await;
-                            conn_guard.retain(|client_id, sender| {
-                                if sender.receiver_count() == 0 {
-                                    log::debug!("removing disconnected client: {}", client_id);
-                                    false
-                                } else {
-                                    true
+                        Ok(payload_str) => {
+                            match serde_json::from_str::<SpeedAggregation>(payload_str) {
+                                Err(e) => {
+                                    log::error!("failed to deserialize speed aggregation from kafka: {}", e);
+                                    log::debug!("invalid speed payload: {}", payload_str);
                                 }
-                            });
+                                Ok(speed_data) => {
+                                    let telemetry_message = SocketMessage::Speed(speed_data);
+                                    match serde_json::to_string(&telemetry_message) {
+                                        Err(e) => {
+                                            log::error!("failed to serialize speed telemetry message: {}", e);
+                                        }
+                                        Ok(json_str) => {
+                                            if let Err(e) = broadcast_tx.send(json_str) {
+                                                log::error!("failed to broadcast speed message: {}", e);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
+                } else {
+                    log::warn!("received speed message with no payload");
+                }
+            }
+        }
+    }
+}
+
+async fn consume_rpm(
+    bootstrap_servers: &str,
+    topic: &str,
+    broadcast_tx: broadcast::Sender<String>,
+) -> Result<(), KafkaConsumptionException> {
+    let consumer: StreamConsumer = ClientConfig::new()
+        .set("group.id", "f1-socket-server-rpm")
+        .set("bootstrap.servers", bootstrap_servers)
+        .set("auto.offset.reset", "earliest")
+        .create()
+        .map_err(|e| KafkaConsumptionException::ConsumerCreationError(e.to_string()))?;
+
+    consumer
+        .subscribe(&[&topic])
+        .map_err(|e| KafkaConsumptionException::TopicSubscriptionError(e.to_string()))?;
+
+    loop {
+        match consumer.recv().await {
+            Err(e) => {
+                log::error!("rpm consumer error: {}", e);
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            Ok(message) => {
+                if let Some(payload) = message.payload() {
+                    match std::str::from_utf8(payload) {
+                        Err(e) => {
+                            log::error!("failed to decode rpm message payload as UTF-8: {}", e);
+                        }
+                        Ok(payload_str) => {
+                            match serde_json::from_str::<RPMAggregation>(payload_str) {
+                                Err(e) => {
+                                    log::error!("failed to deserialize rpm aggregation from kafka: {}", e);
+                                    log::debug!("invalid rpm payload: {}", payload_str);
+                                }
+                                Ok(rpm_data) => {
+                                    let telemetry_message = SocketMessage::Rpm(rpm_data);
+                                    match serde_json::to_string(&telemetry_message) {
+                                        Err(e) => {
+                                            log::error!("failed to serialize rpm telemetry message: {}", e);
+                                        }
+                                        Ok(json_str) => {
+                                            if let Err(e) = broadcast_tx.send(json_str) {
+                                                log::error!("failed to broadcast rpm message: {}", e);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    log::warn!("received rpm message with no payload");
                 }
             }
         }
