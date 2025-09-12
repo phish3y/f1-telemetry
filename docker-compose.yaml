@@ -124,11 +124,14 @@ services:
       - CAR_TELEMETRY_TOPIC=f1-telemetry-car-telemetry
       - SPEED_AGGREGATION_TOPIC=speed-aggregation
       - RPM_AGGREGATION_TOPIC=rpm-aggregation
+      - WAREHOUSE_PATH=/opt/warehouse
     depends_on:
       kafka-init:
         condition: service_completed_successfully
       spark-master:
         condition: service_healthy
+    volumes:
+      - warehouse:/opt/warehouse
     networks:
       - f1-network
 
@@ -163,6 +166,10 @@ services:
       - socket
     networks:
       - f1-network
+
+volumes:
+  warehouse:
+    driver: local
 
 networks:
   f1-network:

@@ -5,3 +5,6 @@ target
 .bloop
 .bsp
 .metals
+
+warehouse/*
+!warehouse/.gitkeep

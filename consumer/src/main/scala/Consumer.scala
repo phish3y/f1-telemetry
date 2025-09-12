@@ -26,6 +26,11 @@ object Consumer {
   def main(args: Array[String]): Unit = {
     Logger.getLogger("org.apache.spark.scheduler.TaskSetManager").setLevel(Level.WARN)
 
+    val warehousePath = sys.env.get("WAREHOUSE_PATH") match {
+      case Some(path) => path
+      case None => throw new IllegalArgumentException("WAREHOUSE_PATH environment variable required")
+    }
+
     val kafkaBroker = sys.env.get("KAFKA_BROKER") match {
       case Some(broker) => broker
       case None => throw new IllegalArgumentException("KAFKA_BROKER environment variable required")
@@ -56,10 +61,47 @@ object Consumer {
 
     implicit val spark: SparkSession = SparkSession.builder
       .appName("f1-telemetry-consumer")
-      .config("spark.sql.streaming.checkpointLocation", "/tmp/spark-checkpoints")
+      .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
+      .config("spark.sql.catalog.local", "org.apache.iceberg.spark.SparkCatalog") 
+      .config("spark.sql.catalog.local.type", "hadoop")
+      .config("spark.sql.catalog.local.warehouse", warehousePath)
       .getOrCreate()
 
     import spark.implicits._
+
+    def createIcebergTables(): Unit = {
+      spark.sql("""
+        CREATE TABLE IF NOT EXISTS local.speed_aggregations (
+          window_start timestamp,
+          window_end timestamp,
+          session_uid bigint,
+          avg_speed double,
+          min_speed int,
+          max_speed int,
+          sample_count bigint,
+          date string,
+          hour int
+        ) USING iceberg
+        PARTITIONED BY (date, hour)
+      """)
+      
+      spark.sql("""
+        CREATE TABLE IF NOT EXISTS local.rpm_aggregations (
+          window_start timestamp,
+          window_end timestamp,
+          session_uid bigint,
+          avg_rpm double,
+          min_rpm int,
+          max_rpm int,
+          sample_count bigint,
+          date string,
+          hour int
+        ) USING iceberg
+        PARTITIONED BY (date, hour)
+      """)
+    }
+
+    createIcebergTables()
 
     val carTelemetrySchema = Encoders.product[PacketCarTelemetry].schema
     val carTelemetryStream: Dataset[PacketCarTelemetry] = spark.readStream
@@ -71,7 +113,19 @@ object Consumer {
       .select($"data.*")
       .as[PacketCarTelemetry]
 
-    SpeedAggregation.calculate(carTelemetryStream)
+    val speedAggregation = SpeedAggregation.calculate(carTelemetryStream)
+    val rpmAggregation = RPMAggregation.calculate(carTelemetryStream)
+
+    val speedAggregationWithPartitions = speedAggregation
+      .withColumn("date", date_format($"window_start", "yyyyMMdd"))
+      .withColumn("hour", hour($"window_start"))
+
+    val rpmAggregationWithPartitions = rpmAggregation
+      .withColumn("date", date_format($"window_start", "yyyyMMdd"))
+      .withColumn("hour", hour($"window_start"))
+
+    // Kafka
+    speedAggregation
       .select(
         $"session_uid".cast("string").as("key"),
         to_json(struct($"*")).as("value")
@@ -80,12 +134,11 @@ object Consumer {
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
       .option("topic", speedAggregationTopic)
-      .option("checkpointLocation", "/tmp/spark-checkpoints/speed")
+      .option("checkpointLocation", "/tmp/spark-checkpoints/speed-kafka")
       .outputMode("append")
       .start()
-      // TODO no await?
 
-    RPMAggregation.calculate(carTelemetryStream)
+    rpmAggregation
       .select(
         $"session_uid".cast("string").as("key"),
         to_json(struct($"*")).as("value")
@@ -94,10 +147,30 @@ object Consumer {
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
       .option("topic", rpmAggregationTopic)
-      .option("checkpointLocation", "/tmp/spark-checkpoints/rpm")
+      .option("checkpointLocation", "/tmp/spark-checkpoints/rpm-kafka")
       .outputMode("append")
       .start()
-      .awaitTermination()
+
+    // Iceberg
+    speedAggregationWithPartitions
+      .writeStream
+      .format("iceberg")
+      .outputMode("append")
+      .option("path", s"$warehousePath/speed_aggregations")
+      .option("table", "local.speed_aggregations")
+      .option("checkpointLocation", "/tmp/spark-checkpoints/speed-iceberg")
+      .start()
+
+    rpmAggregationWithPartitions
+      .writeStream
+      .format("iceberg")
+      .outputMode("append")
+      .option("path", s"$warehousePath/rpm_aggregations")
+      .option("table", "local.rpm_aggregations")
+      .option("checkpointLocation", "/tmp/spark-checkpoints/rpm-iceberg")
+      .start()
+
+    spark.streams.awaitAnyTermination()
 
     spark.stop()
   }
