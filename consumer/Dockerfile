@@ -22,7 +22,8 @@ ADD https://repo1.maven.org/maven2/org/apache/spark/spark-token-provider-kafka-0
 ADD https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.5.2/kafka-clients-3.5.2.jar $SPARK_HOME/jars
 ADD https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-3.5_2.12/1.10.0/iceberg-spark-runtime-3.5_2.12-1.10.0.jar $SPARK_HOME/jars
 
-RUN chmod 644 $SPARK_HOME/jars/*.jar
+RUN chmod 644 $SPARK_HOME/jars/*.jar && \
+    mkdir -p /opt/warehouse && chmod -R 0777 /opt/warehouse
 
 COPY --from=builder /app/target/scala-2.12/consumer_2.12-1.0.jar /opt/spark/consumer.jar
 

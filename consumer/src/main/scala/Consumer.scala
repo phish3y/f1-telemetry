@@ -65,6 +65,9 @@ object Consumer {
       .config("spark.sql.catalog.local", "org.apache.iceberg.spark.SparkCatalog") 
       .config("spark.sql.catalog.local.type", "hadoop")
       .config("spark.sql.catalog.local.warehouse", warehousePath)
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer") // TODO
+      .config("spark.sql.adaptive.enabled", "false") // TODO
+      .config("fs.permissions.umask-mode", "000")
       .getOrCreate()
 
     import spark.implicits._
@@ -159,6 +162,7 @@ object Consumer {
       .option("path", s"$warehousePath/speed_aggregations")
       .option("table", "local.speed_aggregations")
       .option("checkpointLocation", "/tmp/spark-checkpoints/speed-iceberg")
+      .trigger(Trigger.ProcessingTime("30 seconds"))
       .start()
 
     rpmAggregationWithPartitions
@@ -168,6 +172,7 @@ object Consumer {
       .option("path", s"$warehousePath/rpm_aggregations")
       .option("table", "local.rpm_aggregations")
       .option("checkpointLocation", "/tmp/spark-checkpoints/rpm-iceberg")
+      .trigger(Trigger.ProcessingTime("30 seconds"))
       .start()
 
     spark.streams.awaitAnyTermination()

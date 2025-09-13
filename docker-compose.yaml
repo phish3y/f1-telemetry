@@ -68,6 +68,10 @@ services:
     depends_on:
       kafka-init:
         condition: service_completed_successfully
+    volumes:
+      - ./warehouse:/opt/warehouse
+    ports:
+      - "8081:8080"
     networks:
       - f1-network
     healthcheck:
@@ -88,6 +92,8 @@ services:
       - SPARK_MASTER_URL=spark://spark-master:7077
       - SPARK_WORKER_CORES=2
       - SPARK_WORKER_MEMORY=2g
+    volumes:
+      - ./warehouse:/opt/warehouse
     networks:
       - f1-network
     deploy:
@@ -131,7 +137,7 @@ services:
       spark-master:
         condition: service_healthy
     volumes:
-      - warehouse:/opt/warehouse
+      - ./warehouse:/opt/warehouse
     networks:
       - f1-network
 
@@ -166,10 +172,6 @@ services:
       - socket
     networks:
       - f1-network
-
-volumes:
-  warehouse:
-    driver: local
 
 networks:
   f1-network:
