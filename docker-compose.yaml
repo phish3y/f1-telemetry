@@ -48,8 +48,8 @@ services:
     entrypoint: [ '/bin/sh', '-c' ]
     command: |
       "
-      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic f1-telemetry-lap --replication-factor 1 --partitions 2
-      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic f1-telemetry-car-telemetry --replication-factor 1 --partitions 2
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic f1-telemetry-lap --replication-factor 1 --partitions 3
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic f1-telemetry-car-telemetry --replication-factor 1 --partitions 3
       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic speed-aggregation --replication-factor 1 --partitions 1
       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic rpm-aggregation --replication-factor 1 --partitions 1
       "
@@ -84,7 +84,6 @@ services:
     build:
       context: spark
       dockerfile: Dockerfile
-    container_name: spark-worker
     depends_on:
       - spark-master
     environment:
@@ -97,7 +96,7 @@ services:
     networks:
       - f1-network
     deploy:
-      replicas: 1
+      replicas: 3
 
   producer:
     container_name: producer
