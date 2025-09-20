@@ -11,9 +11,10 @@ async fn main() {
 
     let bootstrap_servers = std::env::var("KAFKA_BOOTSTRAP_SERVERS").unwrap();
     let lap_topic = std::env::var("LAP_TOPIC").unwrap();
+    let participants_topic = std::env::var("PARTICIPANTS_TOPIC").unwrap();
+    let lobby_info_topic = std::env::var("LOBBY_INFO_TOPIC").unwrap();
     let car_telemetry_topic = std::env::var("CAR_TELEMETRY_TOPIC").unwrap();
 
-    let udp_url = std::env::var("UDP_URL").unwrap();
     let udp_port = std::env::var("UDP_PORT").unwrap();
 
     let channel_size: usize = std::env::var("CHANNEL_SIZE")
@@ -41,13 +42,15 @@ async fn main() {
         }
     });
 
-    let socket = UdpSocket::bind(&format!("{}:{}", udp_url, udp_port)).unwrap();
+    let socket = UdpSocket::bind(&format!("0.0.0.0:{}", udp_port)).unwrap();
 
-    log::info!("recv from: {}:{}", udp_url, udp_port);
+    log::info!("recv from: 0.0.0.0:{}", udp_port);
     log::info!(
-        "publishing to: {}, {}",
+        "publishing to: {}, [{}, {}, {}]",
         &bootstrap_servers,
-        &car_telemetry_topic
+        &car_telemetry_topic,
+        &lap_topic,
+        &participants_topic
     );
 
     loop {
@@ -55,77 +58,103 @@ async fn main() {
         let (amt, _src) = socket.recv_from(&mut buf).unwrap();
 
         log::debug!("recv {} bytes", amt);
-        let header: &packet::header::PacketHeader =
-            bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::header::PacketHeader>()]);
+        let header: &packet::header::PacketHeader = match bytemuck::try_from_bytes(&buf[..std::mem::size_of::<packet::header::PacketHeader>()]) {
+            Ok(header) => header,
+            Err(e) => {
+                log::error!("failed to parse packet header: {:?}", e);
+                continue;
+            }
+        };
 
         match packet::header::PacketId::try_from(header.m_packet_id) {
             Ok(packet::header::PacketId::CarDamage) => {
                 if amt >= std::mem::size_of::<packet::payload::car_damage::PacketCarDamage>() {
-                    let _damage: &packet::payload::car_damage::PacketCarDamage =
-                        bytemuck::from_bytes(
-                            &buf[..std::mem::size_of::<packet::payload::car_damage::PacketCarDamage>(
-                            )],
-                        );
-                    log::debug!("car damage packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::car_damage::PacketCarDamage>(
+                        &buf[..std::mem::size_of::<packet::payload::car_damage::PacketCarDamage>()]
+                    ) {
+                        Ok(_damage) => {
+                            log::debug!("car damage packet received");
+                        }
+                        Err(e) => {
+                            log::error!("failed to parse car damage packet: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::CarSetups) => {
                 if amt >= std::mem::size_of::<packet::payload::car_setups::PacketCarSetups>() {
-                    let _car_setups: &packet::payload::car_setups::PacketCarSetups =
-                        bytemuck::from_bytes(
-                            &buf[..std::mem::size_of::<packet::payload::car_setups::PacketCarSetups>(
-                            )],
-                        );
-                    log::debug!("car setups packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::car_setups::PacketCarSetups>(
+                        &buf[..std::mem::size_of::<packet::payload::car_setups::PacketCarSetups>()]
+                    ) {
+                        Ok(_car_setups) => {
+                            log::debug!("car setups packet received");
+                        }
+                        Err(e) => {
+                            log::error!("failed to parse car setups packet: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::CarStatus) => {
                 if amt >= std::mem::size_of::<packet::payload::car_status::PacketCarStatus>() {
-                    let _car_status: &packet::payload::car_status::PacketCarStatus =
-                        bytemuck::from_bytes(
-                            &buf[..std::mem::size_of::<packet::payload::car_status::PacketCarStatus>(
-                            )],
-                        );
-                    log::debug!("car status packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::car_status::PacketCarStatus>(
+                        &buf[..std::mem::size_of::<packet::payload::car_status::PacketCarStatus>()]
+                    ) {
+                        Ok(_car_status) => {
+                            log::debug!("car status packet received");
+                        }
+                        Err(e) => {
+                            log::error!("failed to parse car status packet: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::CarTelemetry) => {
                 if amt >= std::mem::size_of::<packet::payload::car_telemetry::PacketCarTelemetry>()
                 {
-                    let telemetry_packet: &packet::payload::car_telemetry::PacketCarTelemetry =
-                        bytemuck::from_bytes(
-                            &buf[..std::mem::size_of::<
-                                packet::payload::car_telemetry::PacketCarTelemetry,
-                            >()],
-                        );
-                    log::debug!("car telemetry packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::car_telemetry::PacketCarTelemetry>(
+                        &buf[..std::mem::size_of::<packet::payload::car_telemetry::PacketCarTelemetry>()]
+                    ) {
+                        Ok(telemetry_packet) => {
+                            log::debug!("car telemetry packet received");
 
-                    match serde_json::to_string(telemetry_packet) {
-                        Ok(json_data) => {
-                            let session_uid = telemetry_packet.m_header.m_session_uid;
-                            let key = format!("session_{}", session_uid);
+                            match serde_json::to_string(telemetry_packet) {
+                                Ok(json_data) => {
+                                    let session_uid = telemetry_packet.m_header.m_session_uid;
+                                    let key = format!("session_{}", session_uid);
 
-                            if let Err(e) =
-                                tx.try_send((car_telemetry_topic.clone(), key, json_data))
-                            {
-                                log::error!(
-                                    "failed to queue car telemetry data for Kafka: {:?}",
-                                    e
-                                );
+                                    if let Err(e) =
+                                        tx.try_send((car_telemetry_topic.clone(), key, json_data))
+                                    {
+                                        log::error!(
+                                            "failed to queue car telemetry data for Kafka: {:?}",
+                                            e
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    log::error!("failed to serialize car telemetry data: {:?}", e);
+                                }
                             }
                         }
                         Err(e) => {
-                            log::error!("failed to serialize car telemetry data: {:?}", e);
+                            log::error!("failed to parse car telemetry packet: {:?}", e);
                         }
                     }
                 }
             }
             Ok(packet::header::PacketId::Event) => {
                 if amt >= std::mem::size_of::<packet::payload::event::PacketEvent>() {
-                    let _event: &packet::payload::event::PacketEvent = bytemuck::from_bytes(
-                        &buf[..std::mem::size_of::<packet::payload::event::PacketEvent>()],
-                    );
-                    log::debug!("event packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::event::PacketEvent>(
+                        &buf[..std::mem::size_of::<packet::payload::event::PacketEvent>()]
+                    ) {
+                        Ok(_event) => {
+                            log::debug!("event packet received");
+                        }
+                        Err(e) => {
+                            log::error!("failed to parse event packet: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::FinalClassification) => {
@@ -134,29 +163,42 @@ async fn main() {
                         packet::payload::final_classification::PacketFinalClassification,
                     >()
                 {
-                    let _final_classification: &packet::payload::final_classification::PacketFinalClassification =
-                        bytemuck::from_bytes(&buf[..std::mem::size_of::<packet::payload::final_classification::PacketFinalClassification>()]);
-                    log::debug!("final classification packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::final_classification::PacketFinalClassification>(
+                        &buf[..std::mem::size_of::<packet::payload::final_classification::PacketFinalClassification>()]
+                    ) {
+                        Ok(_final_classification) => {
+                            log::debug!("final classification packet received");
+                        }
+                        Err(e) => {
+                            log::error!("failed to parse final classification packet: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::Lap) => {
                 if amt >= std::mem::size_of::<packet::payload::lap::PacketLap>() {
-                    let lap_packet: &packet::payload::lap::PacketLap = bytemuck::from_bytes(
-                        &buf[..std::mem::size_of::<packet::payload::lap::PacketLap>()],
-                    );
-                    log::debug!("lap data packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::lap::PacketLap>(
+                        &buf[..std::mem::size_of::<packet::payload::lap::PacketLap>()]
+                    ) {
+                        Ok(lap_packet) => {
+                            log::debug!("lap data packet received");
 
-                    match serde_json::to_string(lap_packet) {
-                        Ok(json_data) => {
-                            let session_uid = lap_packet.m_header.m_session_uid;
-                            let key = format!("session_{}", session_uid);
+                            match serde_json::to_string(lap_packet) {
+                                Ok(json_data) => {
+                                    let session_uid = lap_packet.m_header.m_session_uid;
+                                    let key = format!("session_{}", session_uid);
 
-                            if let Err(e) = tx.try_send((lap_topic.clone(), key, json_data)) {
-                                log::error!("failed to queue lap data for Kafka: {:?}", e);
+                                    if let Err(e) = tx.try_send((lap_topic.clone(), key, json_data)) {
+                                        log::error!("failed to queue lap data for Kafka: {:?}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    log::error!("failed to serialize lap data: {:?}", e);
+                                }
                             }
                         }
                         Err(e) => {
-                            log::error!("failed to serialize lap data: {:?}", e);
+                            log::error!("failed to parse lap packet: {:?}", e);
                         }
                     }
                 }
@@ -164,93 +206,161 @@ async fn main() {
             Ok(packet::header::PacketId::LapPositions) => {
                 if amt >= std::mem::size_of::<packet::payload::lap_positions::PacketLapPositions>()
                 {
-                    let _lap_positions: &packet::payload::lap_positions::PacketLapPositions =
-                        bytemuck::from_bytes(
-                            &buf[..std::mem::size_of::<
-                                packet::payload::lap_positions::PacketLapPositions,
-                            >()],
-                        );
-                    log::debug!("lap positions packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::lap_positions::PacketLapPositions>(
+                        &buf[..std::mem::size_of::<packet::payload::lap_positions::PacketLapPositions>()]
+                    ) {
+                        Ok(_lap_positions) => {
+                            log::debug!("lap positions packet received");
+                        }
+                        Err(e) => {
+                            log::error!("failed to parse lap positions packet: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::LobbyInfo) => {
                 if amt >= std::mem::size_of::<packet::payload::lobby_info::PacketLobbyInfo>() {
-                    let _lobby_info: &packet::payload::lobby_info::PacketLobbyInfo =
-                        bytemuck::from_bytes(
-                            &buf[..std::mem::size_of::<packet::payload::lobby_info::PacketLobbyInfo>(
-                            )],
-                        );
-                    log::debug!("lobby info packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::lobby_info::PacketLobbyInfo>(
+                        &buf[..std::mem::size_of::<packet::payload::lobby_info::PacketLobbyInfo>()]
+                    ) {
+                        Ok(lobby_info_packet) => {
+                            log::debug!("lobby info packet received");
+
+                            match serde_json::to_string(lobby_info_packet) {
+                                Ok(json_data) => {
+                                    let session_uid = lobby_info_packet.m_header.m_session_uid;
+                                    let key = format!("session_{}", session_uid);
+
+                                    if let Err(e) =
+                                        tx.try_send((lobby_info_topic.clone(), key, json_data))
+                                    {
+                                        log::error!(
+                                            "failed to queue lobby info data for Kafka: {:?}",
+                                            e
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    log::error!("failed to serialize lobby info data: {:?}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("failed to parse lobby info packet: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::Motion) => {
                 if amt >= std::mem::size_of::<packet::payload::motion::PacketMotion>() {
-                    let _motion: &packet::payload::motion::PacketMotion = bytemuck::from_bytes(
-                        &buf[..std::mem::size_of::<packet::payload::motion::PacketMotion>()],
-                    );
-                    log::debug!("motion packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::motion::PacketMotion>(
+                        &buf[..std::mem::size_of::<packet::payload::motion::PacketMotion>()]
+                    ) {
+                        Ok(_motion) => {
+                            log::debug!("motion packet received");
+                        }
+                        Err(e) => {
+                            log::error!("failed to parse motion packet: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::MotionEx) => {
                 if amt >= std::mem::size_of::<packet::payload::motion_ex::PacketMotionEx>() {
-                    let _motion_ex: &packet::payload::motion_ex::PacketMotionEx =
-                        bytemuck::from_bytes(
-                            &buf[..std::mem::size_of::<packet::payload::motion_ex::PacketMotionEx>(
-                            )],
-                        );
-                    log::debug!("motion Ex packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::motion_ex::PacketMotionEx>(
+                        &buf[..std::mem::size_of::<packet::payload::motion_ex::PacketMotionEx>()]
+                    ) {
+                        Ok(_motion_ex) => {
+                            log::debug!("motion Ex packet received");
+                        }
+                        Err(e) => {
+                            log::error!("failed to parse motion Ex packet: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::Participants) => {
                 if amt >= std::mem::size_of::<packet::payload::participants::PacketParticipants>() {
-                    let _participants: &packet::payload::participants::PacketParticipants =
-                        bytemuck::from_bytes(
-                            &buf[..std::mem::size_of::<
-                                packet::payload::participants::PacketParticipants,
-                            >()],
-                        );
-                    log::debug!("participants packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::participants::PacketParticipants>(
+                        &buf[..std::mem::size_of::<packet::payload::participants::PacketParticipants>()]
+                    ) {
+                        Ok(participants_packet) => {
+                            match serde_json::to_string(participants_packet) {
+                                Ok(json_data) => {
+                                    let session_uid = participants_packet.m_header.m_session_uid;
+                                    let key = format!("session_{}", session_uid);
+
+                                    if let Err(e) = tx.try_send((participants_topic.clone(), key, json_data)) {
+                                        log::error!("failed to queue participants data for Kafka: {:?}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    log::error!("failed to serialize participants data: {:?}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("failed to parse participants packet: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::Session) => {
                 if amt >= std::mem::size_of::<packet::payload::session::PacketSession>() {
-                    let _session: &packet::payload::session::PacketSession = bytemuck::from_bytes(
-                        &buf[..std::mem::size_of::<packet::payload::session::PacketSession>()],
-                    );
-                    log::debug!("session packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::session::PacketSession>(
+                        &buf[..std::mem::size_of::<packet::payload::session::PacketSession>()]
+                    ) {
+                        Ok(_session) => {
+                            log::debug!("session packet received");
+                        }
+                        Err(e) => {
+                            log::error!("failed to parse session packet: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::SessionHistory) => {
                 if amt
                     >= std::mem::size_of::<packet::payload::session_history::PacketSessionHistory>()
                 {
-                    let _session_history: &packet::payload::session_history::PacketSessionHistory =
-                        bytemuck::from_bytes(
-                            &buf[..std::mem::size_of::<
-                                packet::payload::session_history::PacketSessionHistory,
-                            >()],
-                        );
-                    log::debug!("session history packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::session_history::PacketSessionHistory>(
+                        &buf[..std::mem::size_of::<packet::payload::session_history::PacketSessionHistory>()]
+                    ) {
+                        Ok(_session_history) => {
+                            log::debug!("session history packet received");
+                        }
+                        Err(e) => {
+                            log::error!("failed to parse session history packet: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::TimeTrial) => {
                 if amt >= std::mem::size_of::<packet::payload::time_trial::PacketTimeTrial>() {
-                    let _time_trial: &packet::payload::time_trial::PacketTimeTrial =
-                        bytemuck::from_bytes(
-                            &buf[..std::mem::size_of::<packet::payload::time_trial::PacketTimeTrial>(
-                            )],
-                        );
-                    log::debug!("time trial packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::time_trial::PacketTimeTrial>(
+                        &buf[..std::mem::size_of::<packet::payload::time_trial::PacketTimeTrial>()]
+                    ) {
+                        Ok(_time_trial) => {
+                            log::debug!("time trial packet received");
+                        }
+                        Err(e) => {
+                            log::error!("failed to parse time trial packet: {:?}", e);
+                        }
+                    }
                 }
             }
             Ok(packet::header::PacketId::TyreSets) => {
                 if amt >= std::mem::size_of::<packet::payload::tyre_sets::PacketTyreSets>() {
-                    let _tyre_sets: &packet::payload::tyre_sets::PacketTyreSets =
-                        bytemuck::from_bytes(
-                            &buf[..std::mem::size_of::<packet::payload::tyre_sets::PacketTyreSets>(
-                            )],
-                        );
-                    log::debug!("tyre sets packet received");
+                    match bytemuck::try_from_bytes::<packet::payload::tyre_sets::PacketTyreSets>(
+                        &buf[..std::mem::size_of::<packet::payload::tyre_sets::PacketTyreSets>()]
+                    ) {
+                        Ok(_tyre_sets) => {
+                            log::debug!("tyre sets packet received");
+                        }
+                        Err(e) => {
+                            log::error!("failed to parse tyre sets packet: {:?}", e);
+                        }
+                    }
                 }
             }
             Err(_) => {

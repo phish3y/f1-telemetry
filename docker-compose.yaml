@@ -12,7 +12,7 @@ services:
     networks:
       - f1-network
 
-  kafka-broker:
+  kafka-broker: # TODO add more than 1 broker
     image: apache/kafka:3.9.1
     container_name: kafka-broker
     depends_on:
@@ -50,6 +50,8 @@ services:
       "
       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic f1-telemetry-lap --replication-factor 1 --partitions 3
       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic f1-telemetry-car-telemetry --replication-factor 1 --partitions 3
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic f1-telemetry-participants --replication-factor 1 --partitions 3
+      /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic f1-telemetry-lobby-info --replication-factor 1 --partitions 3
       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic speed-aggregation --replication-factor 1 --partitions 1
       /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-broker:19092 --create --if-not-exists --topic rpm-aggregation --replication-factor 1 --partitions 1
       "
@@ -112,6 +114,8 @@ services:
       - UDP_PORT=20777
       - KAFKA_BOOTSTRAP_SERVERS=kafka-broker:19092
       - LAP_TOPIC=f1-telemetry-lap
+      - PARTICIPANTS_TOPIC=f1-telemetry-participants
+      - LOBBY_INFO_TOPIC=f1-telemetry-lobby-info
       - CAR_TELEMETRY_TOPIC=f1-telemetry-car-telemetry
     ports:
       - "20777:20777/udp"
@@ -127,6 +131,8 @@ services:
       - KAFKA_BROKER=kafka-broker:19092
       - LAP_TOPIC=f1-telemetry-lap
       - CAR_TELEMETRY_TOPIC=f1-telemetry-car-telemetry
+      - PARTICIPANTS_TOPIC=f1-telemetry-participants
+      - LOBBY_INFO_TOPIC=f1-telemetry-lobby-info
       - SPEED_AGGREGATION_TOPIC=speed-aggregation
       - RPM_AGGREGATION_TOPIC=rpm-aggregation
       - WAREHOUSE_PATH=/opt/warehouse
@@ -147,16 +153,30 @@ services:
       dockerfile: Dockerfile
     environment:
       - RUST_LOG=debug
-      - SOCKET_URL=0.0.0.0
       - SOCKET_PORT=8080
       - KAFKA_BOOTSTRAP_SERVERS=kafka-broker:19092
       - SPEED_AGGREGATION_TOPIC=speed-aggregation
       - RPM_AGGREGATION_TOPIC=rpm-aggregation
-    ports: # TODO
+    ports: # TODO is this needed?
       - "8080:8080"
     depends_on:
       kafka-init:
         condition: service_completed_successfully
+    networks:
+      - f1-network
+
+  api:
+    container_name: api
+    build:
+      context: api
+      dockerfile: Dockerfile
+    environment:
+      - API_PORT=3000
+      - WAREHOUSE_PATH=/opt/warehouse
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./warehouse:/opt/warehouse
     networks:
       - f1-network
 

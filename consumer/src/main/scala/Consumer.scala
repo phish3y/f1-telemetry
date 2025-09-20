@@ -20,6 +20,9 @@ import packet.Header
 import packet.payload.{Lap, PacketLap, CarTelemetry, PacketCarTelemetry}
 import aggregation.SpeedAggregation
 import aggregation.RPMAggregation
+import packet.payload.PacketParticipants
+import packet.payload.LobbyInfo
+import packet.payload.PacketLobbyInfo
 
 object Consumer {
 
@@ -36,10 +39,20 @@ object Consumer {
       case None => throw new IllegalArgumentException("KAFKA_BROKER environment variable required")
     }
 
-    // val lapTopic = sys.env.get("LAP_TOPIC") match {
-    //   case Some(broker) => broker
-    //   case None => throw new IllegalArgumentException("LAP_TOPIC environment variable required")
-    // }
+    val participantsTopic = sys.env.get("PARTICIPANTS_TOPIC") match {
+      case Some(broker) => broker
+      case None => throw new IllegalArgumentException("PARTICIPANTS_TOPIC environment variable required")
+    }
+
+    val lobbyInfoTopic = sys.env.get("LOBBY_INFO_TOPIC") match {
+      case Some(broker) => broker
+      case None => throw new IllegalArgumentException("LOBBY_INFO_TOPIC environment variable required")
+    }
+
+    val lapTopic = sys.env.get("LAP_TOPIC") match {
+      case Some(broker) => broker
+      case None => throw new IllegalArgumentException("LAP_TOPIC environment variable required")
+    }
 
     val carTelemetryTopic = sys.env.get("CAR_TELEMETRY_TOPIC") match {
       case Some(broker) => broker
@@ -74,30 +87,32 @@ object Consumer {
 
     def createIcebergTables(): Unit = {
       spark.sql("""
-        CREATE TABLE IF NOT EXISTS local.speed_aggregations (
-          window_start timestamp,
-          window_end timestamp,
+        CREATE TABLE IF NOT EXISTS local.lap (
+          timestamp timestamp,
           session_uid bigint,
-          avg_speed double,
-          min_speed int,
-          max_speed int,
-          sample_count bigint,
-          date string,
-          hour int
-        ) USING iceberg
-        PARTITIONED BY (date, hour)
-      """)
-      
-      spark.sql("""
-        CREATE TABLE IF NOT EXISTS local.rpm_aggregations (
-          window_start timestamp,
-          window_end timestamp,
-          session_uid bigint,
-          avg_rpm double,
-          min_rpm int,
-          max_rpm int,
-          sample_count bigint,
-          date string,
+
+          car_index int,
+          player_name string,
+
+          current_lap_num int,
+          last_lap_time_ms bigint,
+          current_lap_time_ms bigint,
+
+          sector1_time_ms bigint,
+          sector2_time_ms bigint,
+
+          car_position int,
+
+          speed_trap_fastest_speed float,
+
+          num_pit_stops int,
+          penalties int,
+          total_warnings int,
+          corner_cutting_warnings int,
+
+          grid_position int,
+          
+          date int,
           hour int
         ) USING iceberg
         PARTITIONED BY (date, hour)
@@ -106,6 +121,7 @@ object Consumer {
 
     createIcebergTables()
 
+    // real time
     val carTelemetrySchema = Encoders.product[PacketCarTelemetry].schema
     val carTelemetryStream: Dataset[PacketCarTelemetry] = spark.readStream
       .format("kafka")
@@ -127,7 +143,6 @@ object Consumer {
       .withColumn("date", date_format($"window_start", "yyyyMMdd"))
       .withColumn("hour", hour($"window_start"))
 
-    // Kafka
     speedAggregation
       .select(
         $"session_uid".cast("string").as("key"),
@@ -154,26 +169,76 @@ object Consumer {
       .outputMode("append")
       .start()
 
-    // Iceberg
-    speedAggregationWithPartitions
-      .writeStream
+
+    // historial
+    val lapSchema = Encoders.product[PacketLap].schema
+    val lapStream: Dataset[PacketLap] = spark.readStream
+      .format("kafka")
+      .option("kafka.bootstrap.servers", kafkaBroker)
+      .option("subscribe", lapTopic)
+      .load()
+      .select(from_json($"value".cast("string"), lapSchema).as("data"))
+      .select($"data.*")
+      .as[PacketLap]
+
+    val participantsSchema = Encoders.product[PacketParticipants].schema
+    val participantsStream: Dataset[PacketParticipants] = spark.readStream
+      .format("kafka")
+      .option("kafka.bootstrap.servers", kafkaBroker)
+      .option("subscribe", participantsTopic)
+      .load()
+      .select(from_json($"value".cast("string"), participantsSchema).as("data"))
+      .select($"data.*")
+      .as[PacketParticipants]
+
+    val lobbyInfoSchema = Encoders.product[PacketLobbyInfo].schema
+    val lobbyInfoStream: Dataset[PacketLobbyInfo] = spark.readStream
+      .format("kafka")
+      .option("kafka.bootstrap.servers", kafkaBroker)
+      .option("subscribe", lobbyInfoTopic)
+      .load()
+      .select(from_json($"value".cast("string"), lobbyInfoSchema).as("data"))
+      .select($"data.*")
+      .as[PacketLobbyInfo]
+
+    model.Lap.fromPacket(lapStream, lobbyInfoStream).writeStream
       .format("iceberg")
       .outputMode("append")
-      .option("path", s"$warehousePath/speed_aggregations")
-      .option("table", "local.speed_aggregations")
-      .option("checkpointLocation", "/tmp/spark-checkpoints/speed-iceberg")
+      .option("path", s"$warehousePath/lap")
+      .option("table", "local.lap")
       .trigger(Trigger.ProcessingTime("30 seconds"))
+      .option("checkpointLocation", "/tmp/spark-checkpoints/lap")
       .start()
 
-    rpmAggregationWithPartitions
-      .writeStream
-      .format("iceberg")
-      .outputMode("append")
-      .option("path", s"$warehousePath/rpm_aggregations")
-      .option("table", "local.rpm_aggregations")
-      .option("checkpointLocation", "/tmp/spark-checkpoints/rpm-iceberg")
-      .trigger(Trigger.ProcessingTime("30 seconds"))
-      .start()
+    // Iceberg
+    // enrichedLaps
+    //   .select(
+    //     $"timestamp",
+    //     $"session_uid",
+    //     $"player_car_index",
+    //     $"m_participants".getItem($"player_car_index").getField("m_name").as("driver_name"),
+    //     $"m_participants".getItem($"player_car_index").getField("m_team_id").as("team_id"),
+    //     $"m_participants".getItem($"player_car_index").getField("m_race_number").as("race_number"),
+    //     $"m_participants".getItem($"player_car_index").getField("m_nationality").as("nationality"),
+    //     $"m_last_lap_time_in_ms".as("last_lap_time_ms"),
+    //     $"m_current_lap_time_in_ms".as("current_lap_time_ms"),
+    //     $"m_lap_distance".as("lap_distance"),
+    //     $"m_total_distance".as("total_distance"),
+    //     $"m_car_position".as("car_position"),
+    //     $"m_current_lap_num".as("current_lap_num"),
+    //     $"m_pit_status".as("pit_status"),
+    //     $"m_sector".as("sector"),
+    //     date_format($"timestamp", "yyyyMMdd").cast("int").as("date"),
+    //     hour($"timestamp").as("hour")
+    //   )
+    //   .writeStream
+    //   .format("iceberg")
+    //   .outputMode("append")
+    //   .option("path", s"$warehousePath/enriched_laps")
+    //   .option("table", "local.enriched_laps")
+    //   .trigger(Trigger.ProcessingTime("5 seconds"))
+    //   .option("checkpointLocation", "/tmp/spark-checkpoints/enriched-laps")
+    //   .start()
 
     spark.streams.awaitAnyTermination()
 

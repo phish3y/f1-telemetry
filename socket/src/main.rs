@@ -5,6 +5,7 @@ use rdkafka::{
     ClientConfig, Message,
     consumer::{Consumer, StreamConsumer},
 };
+use thiserror::Error;
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::{RwLock, broadcast},
@@ -318,23 +319,11 @@ async fn handle_connection(
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 enum KafkaConsumptionException {
+    #[error("failed to create consumer: {0}")]
     ConsumerCreationError(String),
+    
+    #[error("failed to subscribe to topic: {0}")]
     TopicSubscriptionError(String),
 }
-
-impl std::fmt::Display for KafkaConsumptionException {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            KafkaConsumptionException::ConsumerCreationError(msg) => {
-                write!(f, "failed to create consumer: {}", msg)
-            }
-            KafkaConsumptionException::TopicSubscriptionError(msg) => {
-                write!(f, "failed to subscribe to topic: {}", msg)
-            }
-        }
-    }
-}
-
-impl std::error::Error for KafkaConsumptionException {}
