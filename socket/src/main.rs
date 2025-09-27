@@ -16,7 +16,10 @@ use tokio_tungstenite::{
 };
 use uuid::Uuid;
 
-use crate::{aggregation::{rpm_aggregation::RPMAggregation, speed_aggregation::SpeedAggregation}, socket_message::SocketMessage};
+use crate::{
+    aggregation::{rpm_aggregation::RPMAggregation, speed_aggregation::SpeedAggregation},
+    socket_message::SocketMessage,
+};
 
 mod aggregation;
 mod socket_message;
@@ -45,10 +48,10 @@ async fn main() {
     let satc = speed_aggregation_topic.clone();
     let ratc = rpm_aggregation_topic.clone();
     let txc = tx.clone();
-    let consume_handle = tokio::spawn(async move { 
+    let consume_handle = tokio::spawn(async move {
         let speed_task = consume_speed(&bsc, &satc, txc.clone());
         let rpm_task = consume_rpm(&bsc, &ratc, txc.clone());
-        
+
         tokio::select! {
             result = speed_task => {
                 log::error!("speed consumer terminated: {:?}", result);
@@ -127,11 +130,11 @@ async fn consume_speed(
         .set("bootstrap.servers", bootstrap_servers)
         .set("auto.offset.reset", "earliest")
         .create()
-        .map_err(|e| KafkaConsumptionException::ConsumerCreationError(e.to_string()))?;
+        .map_err(|e| KafkaConsumptionException::ConsumerCreation(e.to_string()))?;
 
     consumer
         .subscribe(&[&topic])
-        .map_err(|e| KafkaConsumptionException::TopicSubscriptionError(e.to_string()))?;
+        .map_err(|e| KafkaConsumptionException::TopicSubscription(e.to_string()))?;
 
     loop {
         match consumer.recv().await {
@@ -148,18 +151,27 @@ async fn consume_speed(
                         Ok(payload_str) => {
                             match serde_json::from_str::<SpeedAggregation>(payload_str) {
                                 Err(e) => {
-                                    log::error!("failed to deserialize speed aggregation from kafka: {}", e);
+                                    log::error!(
+                                        "failed to deserialize speed aggregation from kafka: {}",
+                                        e
+                                    );
                                     log::debug!("invalid speed payload: {}", payload_str);
                                 }
                                 Ok(speed_data) => {
                                     let telemetry_message = SocketMessage::Speed(speed_data);
                                     match serde_json::to_string(&telemetry_message) {
                                         Err(e) => {
-                                            log::error!("failed to serialize speed telemetry message: {}", e);
+                                            log::error!(
+                                                "failed to serialize speed telemetry message: {}",
+                                                e
+                                            );
                                         }
                                         Ok(json_str) => {
                                             if let Err(e) = broadcast_tx.send(json_str) {
-                                                log::error!("failed to broadcast speed message: {}", e);
+                                                log::error!(
+                                                    "failed to broadcast speed message: {}",
+                                                    e
+                                                );
                                             }
                                         }
                                     }
@@ -185,11 +197,11 @@ async fn consume_rpm(
         .set("bootstrap.servers", bootstrap_servers)
         .set("auto.offset.reset", "earliest")
         .create()
-        .map_err(|e| KafkaConsumptionException::ConsumerCreationError(e.to_string()))?;
+        .map_err(|e| KafkaConsumptionException::ConsumerCreation(e.to_string()))?;
 
     consumer
         .subscribe(&[&topic])
-        .map_err(|e| KafkaConsumptionException::TopicSubscriptionError(e.to_string()))?;
+        .map_err(|e| KafkaConsumptionException::TopicSubscription(e.to_string()))?;
 
     loop {
         match consumer.recv().await {
@@ -206,18 +218,27 @@ async fn consume_rpm(
                         Ok(payload_str) => {
                             match serde_json::from_str::<RPMAggregation>(payload_str) {
                                 Err(e) => {
-                                    log::error!("failed to deserialize rpm aggregation from kafka: {}", e);
+                                    log::error!(
+                                        "failed to deserialize rpm aggregation from kafka: {}",
+                                        e
+                                    );
                                     log::debug!("invalid rpm payload: {}", payload_str);
                                 }
                                 Ok(rpm_data) => {
                                     let telemetry_message = SocketMessage::Rpm(rpm_data);
                                     match serde_json::to_string(&telemetry_message) {
                                         Err(e) => {
-                                            log::error!("failed to serialize rpm telemetry message: {}", e);
+                                            log::error!(
+                                                "failed to serialize rpm telemetry message: {}",
+                                                e
+                                            );
                                         }
                                         Ok(json_str) => {
                                             if let Err(e) = broadcast_tx.send(json_str) {
-                                                log::error!("failed to broadcast rpm message: {}", e);
+                                                log::error!(
+                                                    "failed to broadcast rpm message: {}",
+                                                    e
+                                                );
                                             }
                                         }
                                     }
@@ -322,8 +343,8 @@ async fn handle_connection(
 #[derive(Error, Debug)]
 enum KafkaConsumptionException {
     #[error("failed to create consumer: {0}")]
-    ConsumerCreationError(String),
-    
+    ConsumerCreation(String),
+
     #[error("failed to subscribe to topic: {0}")]
-    TopicSubscriptionError(String),
+    TopicSubscription(String),
 }

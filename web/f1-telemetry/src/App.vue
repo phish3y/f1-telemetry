@@ -1,7 +1,7 @@
 <template>
   <div class="telemetry-dashboard">
     <div class="title-bar">
-      <div class="title-text">F1 Telemetry Monitor</div>
+      <div class="title-text">F1 Telemetry Dashboard</div>
       <div class="title-right">
         <div :class="['connection-status', isConnected ? 'connected' : 'disconnected']">
           {{ isConnected ? 'Connected' : 'Disconnected' }}
@@ -133,11 +133,11 @@ onUnmounted(() => {
 }
 
 .connection-status.connected {
-  color: #90EE90;
+  color: #90ee90;
 }
 
 .connection-status.disconnected {
-  color: #FFB6C1;
+  color: #ffb6c1;
 }
 
 .title-version {

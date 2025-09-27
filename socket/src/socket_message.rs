@@ -1,5 +1,5 @@
+use crate::aggregation::{rpm_aggregation::RPMAggregation, speed_aggregation::SpeedAggregation};
 use serde::{Deserialize, Serialize};
-use crate::aggregation::{speed_aggregation::SpeedAggregation, rpm_aggregation::RPMAggregation};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]

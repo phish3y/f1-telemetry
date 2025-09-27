@@ -6,11 +6,7 @@
       </span>
     </div>
     <div class="chart-content">
-      <Line
-        :data="chartData"
-        :options="chartOptions"
-        :height="280"
-      />
+      <Line :data="chartData" :options="chartOptions" :height="280" />
     </div>
   </div>
 </template>
@@ -28,7 +24,7 @@ import {
   Tooltip,
   Legend,
   TimeScale,
-  type TooltipItem
+  type TooltipItem,
 } from 'chart.js'
 import 'chartjs-adapter-date-fns'
 import type { SpeedAggregation } from '../types/aggregations'
@@ -41,7 +37,7 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  TimeScale
+  TimeScale,
 )
 
 const props = defineProps<{
@@ -59,7 +55,7 @@ watch(
         speedDataHistory.value.shift()
       }
     }
-  }
+  },
 )
 
 const currentSessionId = computed(() => {
@@ -78,9 +74,9 @@ const chartData = computed(() => {
     datasets: [
       {
         label: 'Min Speed',
-        data: recentData.map(point => ({
+        data: recentData.map((point) => ({
           x: new Date(point.window_start).getTime(),
-          y: point.min_speed
+          y: point.min_speed,
         })),
         borderColor: '#6b46c1',
         backgroundColor: 'rgba(107, 70, 193, 0.1)',
@@ -91,13 +87,13 @@ const chartData = computed(() => {
         pointBorderColor: '#ffffff',
         pointBorderWidth: 1,
         tension: 0.2,
-        borderWidth: 2
+        borderWidth: 2,
       },
       {
         label: 'Avg Speed',
-        data: recentData.map(point => ({
+        data: recentData.map((point) => ({
           x: new Date(point.window_start).getTime(),
-          y: point.avg_speed
+          y: point.avg_speed,
         })),
         borderColor: '#059669',
         backgroundColor: 'rgba(5, 150, 105, 0.1)',
@@ -108,13 +104,13 @@ const chartData = computed(() => {
         pointBorderColor: '#ffffff',
         pointBorderWidth: 1,
         tension: 0.2,
-        borderWidth: 2
+        borderWidth: 2,
       },
       {
         label: 'Max Speed',
-        data: recentData.map(point => ({
+        data: recentData.map((point) => ({
           x: new Date(point.window_start).getTime(),
-          y: point.max_speed
+          y: point.max_speed,
         })),
         borderColor: '#dc2626',
         backgroundColor: 'rgba(220, 38, 38, 0.1)',
@@ -125,9 +121,9 @@ const chartData = computed(() => {
         pointBorderColor: '#ffffff',
         pointBorderWidth: 1,
         tension: 0.2,
-        borderWidth: 2
-      }
-    ]
+        borderWidth: 2,
+      },
+    ],
   }
 })
 
@@ -139,11 +135,11 @@ const chartOptions = computed(() => {
     responsive: true,
     maintainAspectRatio: false,
     animation: {
-      duration: 0
+      duration: 0,
     },
     plugins: {
       title: {
-        display: false
+        display: false,
       },
       legend: {
         display: true,
@@ -153,14 +149,14 @@ const chartOptions = computed(() => {
           font: {
             family: 'Geneva, Tahoma, sans-serif',
             size: 11,
-            weight: 'normal' as const
+            weight: 'normal' as const,
           },
           usePointStyle: true,
           pointStyle: 'circle',
           boxWidth: 8,
           boxHeight: 8,
-          padding: 15
-        }
+          padding: 15,
+        },
       },
       tooltip: {
         backgroundColor: '#ffffff',
@@ -173,26 +169,26 @@ const chartOptions = computed(() => {
         titleFont: {
           family: 'Geneva, Tahoma, sans-serif',
           size: 11,
-          weight: 'bold' as const
+          weight: 'bold' as const,
         },
         bodyFont: {
           family: 'Geneva, Tahoma, sans-serif',
-          size: 11
+          size: 11,
         },
         callbacks: {
-          title: function(context: TooltipItem<'line'>[]) {
+          title: function (context: TooltipItem<'line'>[]) {
             return new Date(context[0].parsed.x).toLocaleTimeString()
           },
-          label: function(context: TooltipItem<'line'>) {
+          label: function (context: TooltipItem<'line'>) {
             return `${context.dataset.label}: ${context.parsed.y.toFixed(1)} km/h`
-          }
-        }
-      }
+          },
+        },
+      },
     },
     interaction: {
       mode: 'nearest' as const,
       axis: 'x' as const,
-      intersect: false
+      intersect: false,
     },
     scales: {
       x: {
@@ -200,13 +196,20 @@ const chartOptions = computed(() => {
         time: {
           displayFormats: {
             second: 'HH:mm:ss',
-            minute: 'HH:mm:ss'
+            minute: 'HH:mm:ss',
           },
-          unit: 'second' as const
+          unit: 'second' as const,
         },
-        min: speedDataHistory.value.length > 0 ?
-          Math.max(now - timeWindow, new Date(speedDataHistory.value[Math.max(0, speedDataHistory.value.length - maxDataPoints)]?.window_start || now).getTime()) :
-          now - timeWindow,
+        min:
+          speedDataHistory.value.length > 0
+            ? Math.max(
+                now - timeWindow,
+                new Date(
+                  speedDataHistory.value[Math.max(0, speedDataHistory.value.length - maxDataPoints)]
+                    ?.window_start || now,
+                ).getTime(),
+              )
+            : now - timeWindow,
         max: now + 5000,
         title: {
           display: true,
@@ -215,25 +218,25 @@ const chartOptions = computed(() => {
           font: {
             family: 'Geneva, Tahoma, sans-serif',
             size: 11,
-            weight: 'normal' as const
-          }
+            weight: 'normal' as const,
+          },
         },
         ticks: {
           color: '#666666',
           font: {
             family: 'Geneva, Tahoma, sans-serif',
-            size: 10
+            size: 10,
           },
-          maxTicksLimit: 8
+          maxTicksLimit: 8,
         },
         grid: {
           color: '#e5e5e5',
-          lineWidth: 1
+          lineWidth: 1,
         },
         border: {
           color: '#cccccc',
-          width: 1
-        }
+          width: 1,
+        },
       },
       y: {
         beginAtZero: false,
@@ -244,26 +247,26 @@ const chartOptions = computed(() => {
           font: {
             family: 'Geneva, Tahoma, sans-serif',
             size: 11,
-            weight: 'normal' as const
-          }
+            weight: 'normal' as const,
+          },
         },
         ticks: {
           color: '#666666',
           font: {
             family: 'Geneva, Tahoma, sans-serif',
-            size: 10
-          }
+            size: 10,
+          },
         },
         grid: {
           color: '#e5e5e5',
-          lineWidth: 1
+          lineWidth: 1,
         },
         border: {
           color: '#cccccc',
-          width: 1
-        }
-      }
-    }
+          width: 1,
+        },
+      },
+    },
   }
 })
 </script>

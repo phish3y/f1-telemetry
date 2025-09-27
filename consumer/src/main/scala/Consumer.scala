@@ -31,7 +31,8 @@ object Consumer {
 
     val warehousePath = sys.env.get("WAREHOUSE_PATH") match {
       case Some(path) => path
-      case None => throw new IllegalArgumentException("WAREHOUSE_PATH environment variable required")
+      case None =>
+        throw new IllegalArgumentException("WAREHOUSE_PATH environment variable required")
     }
 
     val kafkaBroker = sys.env.get("KAFKA_BROKER") match {
@@ -41,12 +42,14 @@ object Consumer {
 
     val participantsTopic = sys.env.get("PARTICIPANTS_TOPIC") match {
       case Some(broker) => broker
-      case None => throw new IllegalArgumentException("PARTICIPANTS_TOPIC environment variable required")
+      case None =>
+        throw new IllegalArgumentException("PARTICIPANTS_TOPIC environment variable required")
     }
 
     val lobbyInfoTopic = sys.env.get("LOBBY_INFO_TOPIC") match {
       case Some(broker) => broker
-      case None => throw new IllegalArgumentException("LOBBY_INFO_TOPIC environment variable required")
+      case None =>
+        throw new IllegalArgumentException("LOBBY_INFO_TOPIC environment variable required")
     }
 
     val lapTopic = sys.env.get("LAP_TOPIC") match {
@@ -74,12 +77,15 @@ object Consumer {
 
     implicit val spark: SparkSession = SparkSession.builder
       .appName("f1-telemetry-consumer")
-      .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
-      .config("spark.sql.catalog.local", "org.apache.iceberg.spark.SparkCatalog") 
+      .config(
+        "spark.sql.extensions",
+        "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
+      )
+      .config("spark.sql.catalog.local", "org.apache.iceberg.spark.SparkCatalog")
       .config("spark.sql.catalog.local.type", "hadoop")
       .config("spark.sql.catalog.local.warehouse", warehousePath)
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer") // TODO
-      .config("spark.sql.adaptive.enabled", "false") // TODO
+      .config("spark.sql.adaptive.enabled", "false")                            // TODO
       .config("fs.permissions.umask-mode", "000")
       .getOrCreate()
 
@@ -133,7 +139,7 @@ object Consumer {
       .as[PacketCarTelemetry]
 
     val speedAggregation = SpeedAggregation.calculate(carTelemetryStream)
-    val rpmAggregation = RPMAggregation.calculate(carTelemetryStream)
+    val rpmAggregation   = RPMAggregation.calculate(carTelemetryStream)
 
     val speedAggregationWithPartitions = speedAggregation
       .withColumn("date", date_format($"window_start", "yyyyMMdd"))
@@ -169,7 +175,6 @@ object Consumer {
       .outputMode("append")
       .start()
 
-
     // historial
     val lapSchema = Encoders.product[PacketLap].schema
     val lapStream: Dataset[PacketLap] = spark.readStream
@@ -201,7 +206,9 @@ object Consumer {
       .select($"data.*")
       .as[PacketLobbyInfo]
 
-    model.Lap.fromPacket(lapStream, lobbyInfoStream).writeStream
+    model.Lap
+      .fromPacket(lapStream, lobbyInfoStream)
+      .writeStream
       .format("iceberg")
       .outputMode("append")
       .option("path", s"$warehousePath/lap")
