@@ -7,3 +7,4 @@ libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % 
 libraryDependencies += "org.apache.spark" %% "spark-core" % "3.5.6" % "provided"
 libraryDependencies += "org.apache.spark" %% "spark-sql" % "3.5.6" % "provided"
 libraryDependencies += "org.apache.iceberg" %% "iceberg-spark-runtime-3.5" % "1.10.0" % "provided"
+libraryDependencies += "io.opentelemetry" % "opentelemetry-api" % "1.54.1"

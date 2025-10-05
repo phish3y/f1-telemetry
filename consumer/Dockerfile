@@ -21,13 +21,28 @@ ADD https://repo1.maven.org/maven2/org/apache/commons/commons-pool2/2.12.1/commo
 ADD https://repo1.maven.org/maven2/org/apache/spark/spark-token-provider-kafka-0-10_2.12/3.5.5/spark-token-provider-kafka-0-10_2.12-3.5.5.jar $SPARK_HOME/jars
 ADD https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.5.2/kafka-clients-3.5.2.jar $SPARK_HOME/jars
 ADD https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-3.5_2.12/1.10.0/iceberg-spark-runtime-3.5_2.12-1.10.0.jar $SPARK_HOME/jars
+ADD https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-api/1.54.1/opentelemetry-api-1.54.1.jar $SPARK_HOME/jars
+ADD https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-context/1.54.1/opentelemetry-context-1.54.1.jar $SPARK_HOME/jars
+
+RUN mkdir -p /opt/jars
+ADD https://repo1.maven.org/maven2/io/opentelemetry/javaagent/opentelemetry-javaagent/2.20.1/opentelemetry-javaagent-2.20.1.jar /opt/jars
 
 RUN chmod 644 $SPARK_HOME/jars/*.jar && \
+    chmod 644 /opt/jars/*.jar && \
     mkdir -p /opt/warehouse && chmod -R 0777 /opt/warehouse
 
 COPY --from=builder /app/target/scala-2.12/consumer_2.12-1.0.jar /opt/spark/consumer.jar
 
+ENV OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+ENV OTEL_TRACES_EXPORTER=otlp
+ENV OTEL_LOGS_EXPORTER=none
+ENV OTEL_METRICS_EXPORTER=none
+ENV OTEL_RESOURCE_ATTRIBUTES=service.name=f1-telemetry-consumer,telemetry.sdk.language=scala
+ENV OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+
 ENTRYPOINT ["spark-submit", \
     "--class", "Consumer", \
     "--master", "spark://spark-master:7077", \
+    "--conf", "spark.driver.extraJavaOptions=-javaagent:/opt/jars/opentelemetry-javaagent-2.20.1.jar", \
+    "--conf", "spark.executor.extraJavaOptions=-javaagent:/opt/jars/opentelemetry-javaagent-2.20.1.jar", \
     "/opt/spark/consumer.jar"]

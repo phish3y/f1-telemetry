@@ -38,13 +38,13 @@ async fn main() {
     let (tx, mut rx) = mpsc::channel::<(String, String, String, String)>(channel_size);
 
     tokio::spawn(async move {
-        while let Some((topic, key, payload, trace_id)) = rx.recv().await {
+        while let Some((topic, key, payload, traceparent)) = rx.recv().await {
             let record = rdkafka::producer::FutureRecord::to(&topic)
                 .key(&key)
                 .payload(&payload)
                 .headers(rdkafka::message::OwnedHeaders::new().insert(rdkafka::message::Header {
-                    key: "trace_id",
-                    value: Some(&trace_id),
+                    key: "traceparent",
+                    value: Some(&traceparent),
                 }));
 
             if let Err(e) = producer.send(record, Duration::from_secs(0)).await {
@@ -137,18 +137,17 @@ async fn main() {
                             log::debug!("car telemetry packet received");
                             let session_uid = telemetry_packet.m_header.m_session_uid;
                             let frame_identifier = telemetry_packet.m_header.m_frame_identifier;
-                            let trace_id = format!("{}_{}_{}",
-                                session_uid,
-                                frame_identifier,
-                                header.m_packet_id
-                            );
                             
                             let mut span = tracer.start("process_car_telemetry_packet");
                             span.set_attribute(KeyValue::new("packet_id", header.m_packet_id.to_string()));
                             span.set_attribute(KeyValue::new("session_uid", session_uid.to_string()));
                             span.set_attribute(KeyValue::new("frame_identifier", frame_identifier.to_string()));
-                            span.set_attribute(KeyValue::new("trace_id", trace_id.clone()));
                             span.set_attribute(KeyValue::new("packet_type", "car_telemetry"));
+
+                            let span_context = span.span_context();
+                            let trace_id = span_context.trace_id().to_string();
+                            let span_id = span_context.span_id().to_string();
+                            let traceparent = format!("00-{}-{}-01", trace_id, span_id);
 
                             span.add_event(
                                 "processing car telemetry packet",
@@ -161,7 +160,7 @@ async fn main() {
                                     let key = format!("session_{}", session_uid);
 
                                     if let Err(e) =
-                                        tx.try_send((car_telemetry_topic.clone(), key, json_data, trace_id.clone()))
+                                        tx.try_send((car_telemetry_topic.clone(), key, json_data, traceparent.clone()))
                                     {
                                         log::error!(
                                             "failed to queue car telemetry data for Kafka: {:?}",
@@ -240,18 +239,18 @@ async fn main() {
                             log::debug!("lap data packet received");
                             let session_uid = lap_packet.m_header.m_session_uid;
                             let frame_identifier = lap_packet.m_header.m_frame_identifier;
-                            let trace_id = format!("{}_{}_{}",
-                                session_uid,
-                                frame_identifier,
-                                header.m_packet_id
-                            );
 
                             let mut span = tracer.start("process_lap_packet");
                             span.set_attribute(KeyValue::new("packet_id", header.m_packet_id.to_string()));
                             span.set_attribute(KeyValue::new("session_uid", session_uid.to_string()));
                             span.set_attribute(KeyValue::new("frame_identifier", frame_identifier.to_string()));
-                            span.set_attribute(KeyValue::new("trace_id", trace_id.clone()));
                             span.set_attribute(KeyValue::new("packet_type", "lap"));
+
+                            // Extract OpenTelemetry trace context for W3C traceparent header
+                            let span_context = span.span_context();
+                            let trace_id = span_context.trace_id().to_string();
+                            let span_id = span_context.span_id().to_string();
+                            let traceparent = format!("00-{}-{}-01", trace_id, span_id);
 
                             span.add_event(
                                 "processing lap packet",
@@ -263,7 +262,7 @@ async fn main() {
                                     let session_uid = lap_packet.m_header.m_session_uid;
                                     let key = format!("session_{}", session_uid);
 
-                                    if let Err(e) = tx.try_send((lap_topic.clone(), key, json_data, trace_id.clone()))
+                                    if let Err(e) = tx.try_send((lap_topic.clone(), key, json_data, traceparent.clone()))
                                     {
                                         log::error!("failed to queue lap data for Kafka: {:?}", e);
                                         span.add_event(
@@ -322,18 +321,18 @@ async fn main() {
                             log::debug!("lobby info packet received");
                             let session_uid = lobby_info_packet.m_header.m_session_uid;
                             let frame_identifier = lobby_info_packet.m_header.m_frame_identifier;
-                            let trace_id = format!("{}_{}_{}",
-                                session_uid,
-                                frame_identifier,
-                                header.m_packet_id
-                            );
 
                             let mut span = tracer.start("process_lobby_info_packet");
                             span.set_attribute(KeyValue::new("packet_id", header.m_packet_id.to_string()));
                             span.set_attribute(KeyValue::new("session_uid", session_uid.to_string()));
                             span.set_attribute(KeyValue::new("frame_identifier", frame_identifier.to_string()));
-                            span.set_attribute(KeyValue::new("trace_id", trace_id.clone()));
                             span.set_attribute(KeyValue::new("packet_type", "lobby_info"));
+
+                            // Extract OpenTelemetry trace context for W3C traceparent header
+                            let span_context = span.span_context();
+                            let trace_id = span_context.trace_id().to_string();
+                            let span_id = span_context.span_id().to_string();
+                            let traceparent = format!("00-{}-{}-01", trace_id, span_id);
 
                             span.add_event(
                                 "processing lobby info packet",
@@ -346,7 +345,7 @@ async fn main() {
                                     let key = format!("session_{}", session_uid);
 
                                     if let Err(e) =
-                                        tx.try_send((lobby_info_topic.clone(), key, json_data, trace_id.clone()))
+                                        tx.try_send((lobby_info_topic.clone(), key, json_data, traceparent.clone()))
                                     {
                                         log::error!(
                                             "failed to queue lobby info data for Kafka: {:?}",
@@ -420,18 +419,18 @@ async fn main() {
                         Ok(participants_packet) => {
                             let session_uid = participants_packet.m_header.m_session_uid;
                             let frame_identifier = participants_packet.m_header.m_frame_identifier;
-                            let trace_id = format!("{}_{}_{}",
-                                session_uid,
-                                frame_identifier,
-                                header.m_packet_id
-                            );
 
                             let mut span = tracer.start("process_participants_packet");
                             span.set_attribute(KeyValue::new("packet_id", header.m_packet_id.to_string()));
                             span.set_attribute(KeyValue::new("session_uid", session_uid.to_string()));
                             span.set_attribute(KeyValue::new("frame_identifier", frame_identifier.to_string()));
-                            span.set_attribute(KeyValue::new("trace_id", trace_id.clone()));
                             span.set_attribute(KeyValue::new("packet_type", "participants"));
+
+                            // Extract OpenTelemetry trace context for W3C traceparent header
+                            let span_context = span.span_context();
+                            let trace_id = span_context.trace_id().to_string();
+                            let span_id = span_context.span_id().to_string();
+                            let traceparent = format!("00-{}-{}-01", trace_id, span_id);
 
                             span.add_event(
                                 "processing participants packet",
@@ -444,7 +443,7 @@ async fn main() {
                                     let key = format!("session_{}", session_uid);
 
                                     if let Err(e) =
-                                        tx.try_send((participants_topic.clone(), key, json_data, trace_id.clone()))
+                                        tx.try_send((participants_topic.clone(), key, json_data, traceparent.clone()))
                                     {
                                         log::error!(
                                             "failed to queue participants data for Kafka: {:?}",

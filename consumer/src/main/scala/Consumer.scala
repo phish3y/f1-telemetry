@@ -15,11 +15,14 @@ import com.fasterxml.jackson.databind.SerializationFeature
 import java.sql.Timestamp
 import org.apache.log4j.Level
 import org.apache.spark.sql.streaming.Trigger
+import io.opentelemetry.api.GlobalOpenTelemetry
+import io.opentelemetry.api.trace.{Span, SpanKind, Tracer, SpanContext, TraceFlags, TraceState}
+import io.opentelemetry.context.Context
+import scala.collection.JavaConverters._
 
 import packet.Header
 import packet.payload.{Lap, PacketLap, CarTelemetry, PacketCarTelemetry}
-import aggregation.SpeedAggregation
-import aggregation.RPMAggregation
+import aggregation.{SpeedAggregation, TracedSpeedAggregation, RPMAggregation}
 import packet.payload.PacketParticipants
 import packet.payload.LobbyInfo
 import packet.payload.PacketLobbyInfo
@@ -126,38 +129,88 @@ object Consumer {
     }
 
     createIcebergTables()
-
+    
     // real time
     val carTelemetrySchema = Encoders.product[PacketCarTelemetry].schema
-    val carTelemetryStream: Dataset[PacketCarTelemetry] = spark.readStream
+    
+    val carTelemetryStreamRaw = spark.readStream
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
       .option("subscribe", carTelemetryTopic)
+      .option("includeHeaders", "true")
       .load()
-      .select(from_json($"value".cast("string"), carTelemetrySchema).as("data"))
-      .select($"data.*")
-      .as[PacketCarTelemetry]
+    
+    val carTelemetryWithTrace = carTelemetryStreamRaw
+      .select(
+        from_json($"value".cast("string"), carTelemetrySchema).as("data"),
+        expr("filter(headers, x -> x.key = 'traceparent')[0].value").cast("string").as("traceparent")
+      )
+      .select($"data.*", $"traceparent")
+    
+    val carTelemetryStream = carTelemetryWithTrace.as[PacketCarTelemetry]
 
-    val speedAggregation = SpeedAggregation.calculate(carTelemetryStream)
+    val speedAggregation = SpeedAggregation.calculate(carTelemetryWithTrace)
     val rpmAggregation   = RPMAggregation.calculate(carTelemetryStream)
 
-    val speedAggregationWithPartitions = speedAggregation
-      .withColumn("date", date_format($"window_start", "yyyyMMdd"))
-      .withColumn("hour", hour($"window_start"))
-
-    val rpmAggregationWithPartitions = rpmAggregation
-      .withColumn("date", date_format($"window_start", "yyyyMMdd"))
-      .withColumn("hour", hour($"window_start"))
+    def writeAggregationWithTracing(
+      batchDF: Dataset[TracedSpeedAggregation], 
+      topic: String
+    ): Unit = {
+      import io.opentelemetry.api.common.{Attributes, AttributeKey}
+      val tracer = GlobalOpenTelemetry.getTracer("f1-telemetry-consumer")
+      
+      batchDF.collect().foreach { traced =>
+        val spanBuilder = tracer.spanBuilder(s"speed-aggregation-window")
+          .setSpanKind(SpanKind.CONSUMER)
+        
+        traced.traceparents.foreach { traceparent =>
+          val parts = traceparent.split("-")
+          require(parts.length == 4, s"invalid traceparent format: $traceparent")
+          
+          val traceId = parts(1)
+          val spanId = parts(2)
+          
+          val remoteSpanContext = SpanContext.createFromRemoteParent(
+            traceId,
+            spanId,
+            TraceFlags.getSampled(),
+            TraceState.getDefault()
+          )
+          
+          spanBuilder.addLink(remoteSpanContext)
+        }
+        
+        val span = spanBuilder.startSpan()
+        
+        span.setAttribute("session_uid", traced.aggregation.session_uid)
+        span.setAttribute("window_start", traced.aggregation.window_start.toString)
+        span.setAttribute("window_end", traced.aggregation.window_end.toString)
+        span.setAttribute("sample_count", traced.aggregation.sample_count)
+        
+        span.addEvent("speed_aggregation_complete")
+        span.end()
+      }
+      
+      import spark.implicits._
+      val speedAggregations = batchDF.map(_.aggregation)(Encoders.product[SpeedAggregation])
+      
+      speedAggregations
+        .select(
+          $"session_uid".cast("string").as("key"),
+          to_json(struct($"*")).as("value")
+        )
+        .write
+        .format("kafka")
+        .option("kafka.bootstrap.servers", kafkaBroker)
+        .option("topic", topic)
+        .save()
+    }
 
     speedAggregation
-      .select(
-        $"session_uid".cast("string").as("key"),
-        to_json(struct($"*")).as("value")
-      )
       .writeStream
-      .format("kafka")
-      .option("kafka.bootstrap.servers", kafkaBroker)
-      .option("topic", speedAggregationTopic)
+      .foreachBatch { (batchDF: Dataset[TracedSpeedAggregation], _: Long) =>
+        writeAggregationWithTracing(batchDF, speedAggregationTopic)
+      }
       .option("checkpointLocation", "/tmp/spark-checkpoints/speed-kafka")
       .outputMode("append")
       .start()
@@ -175,7 +228,7 @@ object Consumer {
       .outputMode("append")
       .start()
 
-    // historial
+    // historical
     val lapSchema = Encoders.product[PacketLap].schema
     val lapStream: Dataset[PacketLap] = spark.readStream
       .format("kafka")
@@ -186,15 +239,15 @@ object Consumer {
       .select($"data.*")
       .as[PacketLap]
 
-    val participantsSchema = Encoders.product[PacketParticipants].schema
-    val participantsStream: Dataset[PacketParticipants] = spark.readStream
-      .format("kafka")
-      .option("kafka.bootstrap.servers", kafkaBroker)
-      .option("subscribe", participantsTopic)
-      .load()
-      .select(from_json($"value".cast("string"), participantsSchema).as("data"))
-      .select($"data.*")
-      .as[PacketParticipants]
+    // val participantsSchema = Encoders.product[PacketParticipants].schema
+    // val participantsStream: Dataset[PacketParticipants] = spark.readStream
+    //   .format("kafka")
+    //   .option("kafka.bootstrap.servers", kafkaBroker)
+    //   .option("subscribe", participantsTopic)
+    //   .load()
+    //   .select(from_json($"value".cast("string"), participantsSchema).as("data"))
+    //   .select($"data.*")
+    //   .as[PacketParticipants]
 
     val lobbyInfoSchema = Encoders.product[PacketLobbyInfo].schema
     val lobbyInfoStream: Dataset[PacketLobbyInfo] = spark.readStream
