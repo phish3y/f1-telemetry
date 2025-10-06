@@ -15,12 +15,12 @@ case class SpeedAggregation(
     min_speed: Int,
     max_speed: Int,
     sample_count: Long
-)
+) extends Aggregation
 
 case class TracedSpeedAggregation(
     aggregation: SpeedAggregation,
     traceparents: Seq[String]
-)
+) extends TracedAggregation[SpeedAggregation]
 
 object SpeedAggregation {
   def calculate(
@@ -40,7 +40,7 @@ object SpeedAggregation {
     playerCarTelemetry
       .withWatermark("timestamp", "5 seconds")
       .groupBy(
-        window($"timestamp", "10 seconds"),
+        window($"timestamp", "3 seconds"),
         $"session_uid"
       )
       .agg(

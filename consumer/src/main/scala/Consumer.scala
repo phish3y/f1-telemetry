@@ -15,14 +15,13 @@ import com.fasterxml.jackson.databind.SerializationFeature
 import java.sql.Timestamp
 import org.apache.log4j.Level
 import org.apache.spark.sql.streaming.Trigger
-import io.opentelemetry.api.GlobalOpenTelemetry
-import io.opentelemetry.api.trace.{Span, SpanKind, Tracer, SpanContext, TraceFlags, TraceState}
-import io.opentelemetry.context.Context
-import scala.collection.JavaConverters._
 
 import packet.Header
 import packet.payload.{Lap, PacketLap, CarTelemetry, PacketCarTelemetry}
-import aggregation.{SpeedAggregation, TracedSpeedAggregation, RPMAggregation}
+import aggregation.{SpeedAggregation, TracedSpeedAggregation, RPMAggregation, TracedRPMAggregation, TracedAggregation}
+import model.{Lap => LapModel, TracedLap, TracedPacket}
+import model.{Participant => ParticipantModel, TracedParticipant}
+import model.{LobbyInfo => LobbyInfoModel, TracedLobbyInfo}
 import packet.payload.PacketParticipants
 import packet.payload.LobbyInfo
 import packet.payload.PacketLobbyInfo
@@ -101,7 +100,6 @@ object Consumer {
           session_uid bigint,
 
           car_index int,
-          player_name string,
 
           current_lap_num int,
           last_lap_time_ms bigint,
@@ -126,11 +124,81 @@ object Consumer {
         ) USING iceberg
         PARTITIONED BY (date, hour)
       """)
+
+      spark.sql("""
+        CREATE TABLE IF NOT EXISTS local.speed_aggregation (
+          window_start timestamp,
+          window_end timestamp,
+          session_uid bigint,
+          avg_speed double,
+          min_speed int,
+          max_speed int,
+          sample_count bigint,
+          date int,
+          hour int
+        ) USING iceberg
+        PARTITIONED BY (date, hour)
+      """)
+
+      spark.sql("""
+        CREATE TABLE IF NOT EXISTS local.rpm_aggregation (
+          window_start timestamp,
+          window_end timestamp,
+          session_uid bigint,
+          avg_rpm double,
+          min_rpm int,
+          max_rpm int,
+          sample_count bigint,
+          date int,
+          hour int
+        ) USING iceberg
+        PARTITIONED BY (date, hour)
+      """)
+
+      spark.sql("""
+        CREATE TABLE IF NOT EXISTS local.participants (
+          timestamp timestamp,
+          session_uid bigint,
+
+          car_index int,
+          ai_controlled int,
+          driver_id int,
+          team_id int,
+          race_number int,
+          nationality int,
+          name string,
+          platform int,
+          
+          date int,
+          hour int
+        ) USING iceberg
+        PARTITIONED BY (date, hour)
+      """)
+
+      spark.sql("""
+        CREATE TABLE IF NOT EXISTS local.lobby_info (
+          timestamp timestamp,
+          session_uid bigint,
+
+          car_index int,
+          ai_controlled int,
+          team_id int,
+          nationality int,
+          name string,
+          car_number int,
+          platform int,
+          ready_status int,
+          
+          date int,
+          hour int
+        ) USING iceberg
+        PARTITIONED BY (date, hour)
+      """)
     }
 
     createIcebergTables()
     
-    // real time
+    // real time aggregates - Both Kafka and Iceberg
     val carTelemetrySchema = Encoders.product[PacketCarTelemetry].schema
     
     val carTelemetryStreamRaw = spark.readStream
@@ -150,155 +218,124 @@ object Consumer {
     val carTelemetryStream = carTelemetryWithTrace.as[PacketCarTelemetry]
 
     val speedAggregation = SpeedAggregation.calculate(carTelemetryWithTrace)
-    val rpmAggregation   = RPMAggregation.calculate(carTelemetryStream)
-
-    def writeAggregationWithTracing(
-      batchDF: Dataset[TracedSpeedAggregation], 
-      topic: String
-    ): Unit = {
-      import io.opentelemetry.api.common.{Attributes, AttributeKey}
-      val tracer = GlobalOpenTelemetry.getTracer("f1-telemetry-consumer")
-      
-      batchDF.collect().foreach { traced =>
-        val spanBuilder = tracer.spanBuilder(s"speed-aggregation-window")
-          .setSpanKind(SpanKind.CONSUMER)
-        
-        traced.traceparents.foreach { traceparent =>
-          val parts = traceparent.split("-")
-          require(parts.length == 4, s"invalid traceparent format: $traceparent")
-          
-          val traceId = parts(1)
-          val spanId = parts(2)
-          
-          val remoteSpanContext = SpanContext.createFromRemoteParent(
-            traceId,
-            spanId,
-            TraceFlags.getSampled(),
-            TraceState.getDefault()
-          )
-          
-          spanBuilder.addLink(remoteSpanContext)
-        }
-        
-        val span = spanBuilder.startSpan()
-        
-        span.setAttribute("session_uid", traced.aggregation.session_uid)
-        span.setAttribute("window_start", traced.aggregation.window_start.toString)
-        span.setAttribute("window_end", traced.aggregation.window_end.toString)
-        span.setAttribute("sample_count", traced.aggregation.sample_count)
-        
-        span.addEvent("speed_aggregation_complete")
-        span.end()
-      }
-      
-      import spark.implicits._
-      val speedAggregations = batchDF.map(_.aggregation)(Encoders.product[SpeedAggregation])
-      
-      speedAggregations
-        .select(
-          $"session_uid".cast("string").as("key"),
-          to_json(struct($"*")).as("value")
-        )
-        .write
-        .format("kafka")
-        .option("kafka.bootstrap.servers", kafkaBroker)
-        .option("topic", topic)
-        .save()
-    }
+    val rpmAggregation   = RPMAggregation.calculate(carTelemetryWithTrace)
 
     speedAggregation
       .writeStream
       .foreachBatch { (batchDF: Dataset[TracedSpeedAggregation], _: Long) =>
-        writeAggregationWithTracing(batchDF, speedAggregationTopic)
+        // Write to Kafka
+        TracedAggregation.writeWithTracing(batchDF, kafkaBroker, speedAggregationTopic, "speed-aggregation-window")
+        
+        // Write to Iceberg
+        import batchDF.sparkSession.implicits._
+        val aggregations = batchDF.map(_.aggregation)
+        aggregations
+          .withColumn("date", date_format($"window_start", "yyyyMMdd").cast("int"))
+          .withColumn("hour", hour($"window_start"))
+          .write
+          .format("iceberg")
+          .mode("append")
+          .option("path", s"$warehousePath/speed_aggregation")
+          .option("table", "local.speed_aggregation")
+          .save()
       }
       .option("checkpointLocation", "/tmp/spark-checkpoints/speed-kafka")
       .outputMode("append")
       .start()
 
     rpmAggregation
-      .select(
-        $"session_uid".cast("string").as("key"),
-        to_json(struct($"*")).as("value")
-      )
       .writeStream
-      .format("kafka")
-      .option("kafka.bootstrap.servers", kafkaBroker)
-      .option("topic", rpmAggregationTopic)
+      .foreachBatch { (batchDF: Dataset[TracedRPMAggregation], _: Long) =>
+        // Write to Kafka
+        TracedAggregation.writeWithTracing(batchDF, kafkaBroker, rpmAggregationTopic, "rpm-aggregation-window")
+        
+        // Write to Iceberg
+        import batchDF.sparkSession.implicits._
+        val aggregations = batchDF.map(_.aggregation)
+        aggregations
+          .withColumn("date", date_format($"window_start", "yyyyMMdd").cast("int"))
+          .withColumn("hour", hour($"window_start"))
+          .write
+          .format("iceberg")
+          .mode("append")
+          .option("path", s"$warehousePath/rpm_aggregation")
+          .option("table", "local.rpm_aggregation")
+          .save()
+      }
       .option("checkpointLocation", "/tmp/spark-checkpoints/rpm-kafka")
       .outputMode("append")
       .start()
 
-    // historical
+    // historical only - Iceberg
     val lapSchema = Encoders.product[PacketLap].schema
-    val lapStream: Dataset[PacketLap] = spark.readStream
+    
+    val lapStreamRaw = spark.readStream
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
       .option("subscribe", lapTopic)
+      .option("includeHeaders", "true")
       .load()
-      .select(from_json($"value".cast("string"), lapSchema).as("data"))
-      .select($"data.*")
-      .as[PacketLap]
+      .select(
+        from_json($"value".cast("string"), lapSchema).as("data"),
+        expr("filter(headers, x -> x.key = 'traceparent')[0].value").cast("string").as("traceparent")
+      )
 
-    // val participantsSchema = Encoders.product[PacketParticipants].schema
-    // val participantsStream: Dataset[PacketParticipants] = spark.readStream
-    //   .format("kafka")
-    //   .option("kafka.bootstrap.servers", kafkaBroker)
-    //   .option("subscribe", participantsTopic)
-    //   .load()
-    //   .select(from_json($"value".cast("string"), participantsSchema).as("data"))
-    //   .select($"data.*")
-    //   .as[PacketParticipants]
+    val participantsSchema = Encoders.product[PacketParticipants].schema
+    val participantsStreamRaw = spark.readStream
+      .format("kafka")
+      .option("kafka.bootstrap.servers", kafkaBroker)
+      .option("subscribe", participantsTopic)
+      .option("includeHeaders", "true")
+      .load()
+      .select(
+        from_json($"value".cast("string"), participantsSchema).as("data"),
+        expr("filter(headers, x -> x.key = 'traceparent')[0].value").cast("string").as("traceparent")
+      )
 
     val lobbyInfoSchema = Encoders.product[PacketLobbyInfo].schema
-    val lobbyInfoStream: Dataset[PacketLobbyInfo] = spark.readStream
+    val lobbyInfoStreamRaw = spark.readStream
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
       .option("subscribe", lobbyInfoTopic)
+      .option("includeHeaders", "true")
       .load()
-      .select(from_json($"value".cast("string"), lobbyInfoSchema).as("data"))
-      .select($"data.*")
-      .as[PacketLobbyInfo]
+      .select(
+        from_json($"value".cast("string"), lobbyInfoSchema).as("data"),
+        expr("filter(headers, x -> x.key = 'traceparent')[0].value").cast("string").as("traceparent")
+      )
 
-    model.Lap
-      .fromPacket(lapStream, lobbyInfoStream)
+    LapModel
+      .fromPacket(lapStreamRaw)
       .writeStream
-      .format("iceberg")
-      .outputMode("append")
-      .option("path", s"$warehousePath/lap")
-      .option("table", "local.lap")
-      .trigger(Trigger.ProcessingTime("30 seconds"))
+      .foreachBatch { (batchDF: Dataset[TracedLap], _: Long) =>
+        TracedPacket.writeWithTracing(batchDF, "local.lap", s"$warehousePath/lap", "lap-write")
+      }
       .option("checkpointLocation", "/tmp/spark-checkpoints/lap")
+      .outputMode("append")
+      .trigger(Trigger.ProcessingTime("30 seconds"))
       .start()
 
-    // Iceberg
-    // enrichedLaps
-    //   .select(
-    //     $"timestamp",
-    //     $"session_uid",
-    //     $"player_car_index",
-    //     $"m_participants".getItem($"player_car_index").getField("m_name").as("driver_name"),
-    //     $"m_participants".getItem($"player_car_index").getField("m_team_id").as("team_id"),
-    //     $"m_participants".getItem($"player_car_index").getField("m_race_number").as("race_number"),
-    //     $"m_participants".getItem($"player_car_index").getField("m_nationality").as("nationality"),
-    //     $"m_last_lap_time_in_ms".as("last_lap_time_ms"),
-    //     $"m_current_lap_time_in_ms".as("current_lap_time_ms"),
-    //     $"m_lap_distance".as("lap_distance"),
-    //     $"m_total_distance".as("total_distance"),
-    //     $"m_car_position".as("car_position"),
-    //     $"m_current_lap_num".as("current_lap_num"),
-    //     $"m_pit_status".as("pit_status"),
-    //     $"m_sector".as("sector"),
-    //     date_format($"timestamp", "yyyyMMdd").cast("int").as("date"),
-    //     hour($"timestamp").as("hour")
-    //   )
-    //   .writeStream
-    //   .format("iceberg")
-    //   .outputMode("append")
-    //   .option("path", s"$warehousePath/enriched_laps")
-    //   .option("table", "local.enriched_laps")
-    //   .trigger(Trigger.ProcessingTime("5 seconds"))
-    //   .option("checkpointLocation", "/tmp/spark-checkpoints/enriched-laps")
-    //   .start()
+    ParticipantModel
+      .fromPacket(participantsStreamRaw)
+      .writeStream
+      .foreachBatch { (batchDF: Dataset[TracedParticipant], _: Long) =>
+        TracedPacket.writeWithTracing(batchDF, "local.participants", s"$warehousePath/participants", "participants-write")
+      }
+      .option("checkpointLocation", "/tmp/spark-checkpoints/participants")
+      .outputMode("append")
+      .trigger(Trigger.ProcessingTime("30 seconds"))
+      .start()
+
+    LobbyInfoModel
+      .fromPacket(lobbyInfoStreamRaw)
+      .writeStream
+      .foreachBatch { (batchDF: Dataset[TracedLobbyInfo], _: Long) =>
+        TracedPacket.writeWithTracing(batchDF, "local.lobby_info", s"$warehousePath/lobby_info", "lobby-info-write")
+      }
+      .option("checkpointLocation", "/tmp/spark-checkpoints/lobby-info")
+      .outputMode("append")
+      .trigger(Trigger.ProcessingTime("30 seconds"))
+      .start()
 
     spark.streams.awaitAnyTermination()
 

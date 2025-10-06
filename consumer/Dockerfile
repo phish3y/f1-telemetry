@@ -33,13 +33,6 @@ RUN chmod 644 $SPARK_HOME/jars/*.jar && \
 
 COPY --from=builder /app/target/scala-2.12/consumer_2.12-1.0.jar /opt/spark/consumer.jar
 
-ENV OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
-ENV OTEL_TRACES_EXPORTER=otlp
-ENV OTEL_LOGS_EXPORTER=none
-ENV OTEL_METRICS_EXPORTER=none
-ENV OTEL_RESOURCE_ATTRIBUTES=service.name=f1-telemetry-consumer,telemetry.sdk.language=scala
-ENV OTEL_EXPORTER_OTLP_PROTOCOL=grpc
-
 ENTRYPOINT ["spark-submit", \
     "--class", "Consumer", \
     "--master", "spark://spark-master:7077", \
