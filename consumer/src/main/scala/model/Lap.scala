@@ -34,16 +34,9 @@ case class TracedLap(
 
 object Lap {
   def fromPacket(
-      lapStreamRaw: org.apache.spark.sql.DataFrame
+      lapStream: Dataset[(PacketLap, String)]
   )(implicit spark: SparkSession): Dataset[TracedLap] = {
     import spark.implicits._
-
-    val lapStream = lapStreamRaw
-      .select(
-        col("data.*"),
-        col("traceparent")
-      )
-      .as[(PacketLap, String)]
 
     lapStream
       .withColumn("timestamp", current_timestamp())

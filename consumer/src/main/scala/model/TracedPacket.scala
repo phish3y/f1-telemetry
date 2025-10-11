@@ -21,12 +21,13 @@ object TracedPacket {
   )(implicit encoder: org.apache.spark.sql.Encoder[T]): Unit = {
     val tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME)
     
-    batchDF.collect().foreach { traced =>
+    val uniqueTraceparents = batchDF.select("traceparent").distinct().collect().map(_.getString(0))
+    uniqueTraceparents.foreach { traceparent =>
       val spanBuilder = tracer.spanBuilder(spanName)
         .setSpanKind(SpanKind.CONSUMER)
       
-      val parts = traced.traceparent.split("-")
-      require(parts.length == 4, s"invalid traceparent format: ${traced.traceparent}")
+      val parts = traceparent.split("-")
+      require(parts.length == 4, s"invalid traceparent format: ${traceparent}")
       
       val traceId = parts(1)
       val spanId = parts(2)

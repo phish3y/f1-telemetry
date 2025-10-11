@@ -27,16 +27,9 @@ case class TracedLobbyInfo(
 
 object LobbyInfo {
   def fromPacket(
-      lobbyInfoStreamRaw: org.apache.spark.sql.DataFrame
+      lobbyInfoStream: Dataset[(PacketLobbyInfo, String)]
   )(implicit spark: SparkSession): Dataset[TracedLobbyInfo] = {
     import spark.implicits._
-
-    val lobbyInfoStream = lobbyInfoStreamRaw
-      .select(
-        col("data.*"),
-        col("traceparent")
-      )
-      .as[(PacketLobbyInfo, String)]
 
     lobbyInfoStream
       .withColumn("timestamp", current_timestamp())

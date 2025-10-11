@@ -27,11 +27,13 @@ object TracedAggregation {
     spanName: String
   )(implicit encoder: org.apache.spark.sql.Encoder[T]): Unit = {
     val tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME)
+    import batchDF.sparkSession.implicits._
     
     batchDF.collect().foreach { traced =>
       val spanBuilder = tracer.spanBuilder(spanName)
         .setSpanKind(SpanKind.CONSUMER)
       
+      // Add links to all producer spans that contributed to this aggregation
       traced.traceparents.foreach { traceparent =>
         val parts = traceparent.split("-")
         require(parts.length == 4, s"invalid traceparent format: $traceparent")
@@ -60,15 +62,10 @@ object TracedAggregation {
       span.end()
     }
     
-    // Write aggregations to Kafka
-    import batchDF.sparkSession.implicits._
-    val aggregations = batchDF.map(_.aggregation)
     
-    aggregations
-      .select(
-        $"session_uid".cast("string").as("key"),
-        to_json(struct($"*")).as("value")
-      )
+    batchDF
+      .map(_.aggregation)
+      .selectExpr("CAST(session_uid AS STRING) AS key", "to_json(struct(*)) AS value")
       .write
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)

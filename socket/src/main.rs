@@ -2,13 +2,13 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures_util::{SinkExt, StreamExt};
 use rdkafka::{
-    ClientConfig, Message,
     consumer::{Consumer, StreamConsumer},
+    ClientConfig, Message,
 };
 use thiserror::Error;
 use tokio::{
     net::{TcpListener, TcpStream},
-    sync::{RwLock, broadcast},
+    sync::{broadcast, RwLock},
 };
 use tokio_tungstenite::{
     accept_async,
@@ -128,7 +128,7 @@ async fn consume_speed(
     let consumer: StreamConsumer = ClientConfig::new()
         .set("group.id", "f1-socket-server-speed")
         .set("bootstrap.servers", bootstrap_servers)
-        .set("auto.offset.reset", "earliest")
+        .set("auto.offset.reset", "latest")
         .create()
         .map_err(|e| KafkaConsumptionException::ConsumerCreation(e.to_string()))?;
 
@@ -195,7 +195,7 @@ async fn consume_rpm(
     let consumer: StreamConsumer = ClientConfig::new()
         .set("group.id", "f1-socket-server-rpm")
         .set("bootstrap.servers", bootstrap_servers)
-        .set("auto.offset.reset", "earliest")
+        .set("auto.offset.reset", "latest")
         .create()
         .map_err(|e| KafkaConsumptionException::ConsumerCreation(e.to_string()))?;
 

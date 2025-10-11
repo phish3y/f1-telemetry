@@ -268,44 +268,46 @@ object Consumer {
 
     // historical only - Iceberg
     val lapSchema = Encoders.product[PacketLap].schema
-    
-    val lapStreamRaw = spark.readStream
+    val lapStream = spark.readStream
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
       .option("subscribe", lapTopic)
       .option("includeHeaders", "true")
       .load()
       .select(
-        from_json($"value".cast("string"), lapSchema).as("data"),
-        expr("filter(headers, x -> x.key = 'traceparent')[0].value").cast("string").as("traceparent")
+        from_json($"value".cast("string"), lapSchema).as("_1"),
+        expr("filter(headers, x -> x.key = 'traceparent')[0].value").cast("string").as("_2")
       )
+      .as[(PacketLap, String)]
 
     val participantsSchema = Encoders.product[PacketParticipants].schema
-    val participantsStreamRaw = spark.readStream
+    val participantsStream = spark.readStream
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
       .option("subscribe", participantsTopic)
       .option("includeHeaders", "true")
       .load()
       .select(
-        from_json($"value".cast("string"), participantsSchema).as("data"),
-        expr("filter(headers, x -> x.key = 'traceparent')[0].value").cast("string").as("traceparent")
+        from_json($"value".cast("string"), participantsSchema).as("_1"),
+        expr("filter(headers, x -> x.key = 'traceparent')[0].value").cast("string").as("_2")
       )
+      .as[(PacketParticipants, String)]
 
     val lobbyInfoSchema = Encoders.product[PacketLobbyInfo].schema
-    val lobbyInfoStreamRaw = spark.readStream
+    val lobbyInfoStream = spark.readStream
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
       .option("subscribe", lobbyInfoTopic)
       .option("includeHeaders", "true")
       .load()
       .select(
-        from_json($"value".cast("string"), lobbyInfoSchema).as("data"),
-        expr("filter(headers, x -> x.key = 'traceparent')[0].value").cast("string").as("traceparent")
+        from_json($"value".cast("string"), lobbyInfoSchema).as("_1"),
+        expr("filter(headers, x -> x.key = 'traceparent')[0].value").cast("string").as("_2")
       )
+      .as[(PacketLobbyInfo, String)]
 
     LapModel
-      .fromPacket(lapStreamRaw)
+      .fromPacket(lapStream)
       .writeStream
       .foreachBatch { (batchDF: Dataset[TracedLap], _: Long) =>
         TracedPacket.writeWithTracing(batchDF, "local.lap", s"$warehousePath/lap", "lap-write")
@@ -316,7 +318,7 @@ object Consumer {
       .start()
 
     ParticipantModel
-      .fromPacket(participantsStreamRaw)
+      .fromPacket(participantsStream)
       .writeStream
       .foreachBatch { (batchDF: Dataset[TracedParticipant], _: Long) =>
         TracedPacket.writeWithTracing(batchDF, "local.participants", s"$warehousePath/participants", "participants-write")
@@ -327,7 +329,7 @@ object Consumer {
       .start()
 
     LobbyInfoModel
-      .fromPacket(lobbyInfoStreamRaw)
+      .fromPacket(lobbyInfoStream)
       .writeStream
       .foreachBatch { (batchDF: Dataset[TracedLobbyInfo], _: Long) =>
         TracedPacket.writeWithTracing(batchDF, "local.lobby_info", s"$warehousePath/lobby_info", "lobby-info-write")

@@ -27,16 +27,9 @@ case class TracedParticipant(
 
 object Participant {
   def fromPacket(
-      participantsStreamRaw: org.apache.spark.sql.DataFrame
+      participantsStream: Dataset[(PacketParticipants, String)]
   )(implicit spark: SparkSession): Dataset[TracedParticipant] = {
     import spark.implicits._
-
-    val participantsStream = participantsStreamRaw
-      .select(
-        col("data.*"),
-        col("traceparent")
-      )
-      .as[(PacketParticipants, String)]
 
     participantsStream
       .withColumn("timestamp", current_timestamp())
