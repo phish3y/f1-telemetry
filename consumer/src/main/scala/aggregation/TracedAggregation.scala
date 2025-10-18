@@ -62,7 +62,6 @@ object TracedAggregation {
       span.end()
     }
     
-    
     batchDF
       .map(_.aggregation)
       .selectExpr("CAST(session_uid AS STRING) AS key", "to_json(struct(*)) AS value")
