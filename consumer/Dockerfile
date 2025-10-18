@@ -10,7 +10,7 @@ COPY src/ ./src/
 
 RUN sbt package
 
-FROM bitnami/spark:3.5.6
+FROM bitnami/spark:3.5
 
 USER root
 
