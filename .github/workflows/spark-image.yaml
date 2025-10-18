@@ -23,8 +23,8 @@ jobs:
         id: build
         uses: docker/build-push-action@v3
         with:
-          context: spark
-          file: Dockerfile
+          context: .
+          file: spark/Dockerfile
           push: true
           build-args: |
           tags: |
