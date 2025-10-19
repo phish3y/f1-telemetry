@@ -1,0 +1,65 @@
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: f1-telmetry-consumer
+  namespace: default
+spec:
+  type: Scala
+  mode: cluster
+  image: ghcr.io/phish3y/f1-telemetry-spark:687cc9c404e7342386ccf6e18c7fd759648c3a17
+  mainClass: Consumer
+  mainApplicationFile: s3a://f1-telemetry-artifacts/jars/consumer_2.12-1.0.jar
+  driver:
+    cores: 1
+    memory: 1G
+    labels:
+      version: 3.5.6
+    serviceAccount: spark-operator-spark
+    env:
+      - name: KAFKA_BROKER
+        value: 10.100.80.208:9094
+      - name: LAP_TOPIC
+        value: f1-telemetry-lap
+      - name: CAR_TELEMETRY_TOPIC
+        value: f1-telemetry-car-telemetry
+      - name: PARTICIPANTS_TOPIC
+        value: f1-telemetry-participants
+      - name: LOBBY_INFO_TOPIC
+        value: f1-telemetry-lobby-info
+      - name: SPEED_AGGREGATION_TOPIC
+        value: speed-aggregation
+      - name: RPM_AGGREGATION_TOPIC
+        value: rpm-aggregation
+      - name: WAREHOUSE_PATH
+        value: /opt/warehouse
+      - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: http://otel-collector:4317
+      - name: OTEL_TRACES_EXPORTER
+        value: otlp
+      - name: OTEL_LOGS_EXPORTER
+        value: none
+      - name: OTEL_METRICS_EXPORTER
+        value: none
+      - name: OTEL_RESOURCE_ATTRIBUTES
+        value: service.name=f1-telemetry-consumer,telemetry.sdk.language=scala
+      - name: OTEL_EXPORTER_OTLP_PROTOCOL
+        value: grpc
+    volumeMounts:
+      - name: f1-telemetry-warehouse
+        mountPath: /opt/warehouse
+
+  executor:
+    cores: 2
+    instances: 4
+    memory: 2G
+    labels:
+      version: 3.5.6
+    serviceAccount: spark-operator-spark
+    volumeMounts:
+      - name: f1-telemetry-warehouse
+        mountPath: /opt/warehouse
+
+  volumes:
+    - name: f1-telemetry-warehouse
+      persistentVolumeClaim:
+        claimName: f1-telemetry-warehouse

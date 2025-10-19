@@ -1,4 +1,4 @@
-name: spark-image
+name: socket-image
 on:
   push:
     branches:
@@ -23,9 +23,8 @@ jobs:
         id: build
         uses: docker/build-push-action@v3
         with:
-          context: spark
-          file: spark/Dockerfile
+          context: socket
+          file: socket/Dockerfile
           push: true
-          build-args: |
           tags: |
-            ghcr.io/phish3y/f1-telemetry-spark:${{ github.sha }}
+            ghcr.io/phish3y/f1-telemetry-socket:${{ github.sha }}

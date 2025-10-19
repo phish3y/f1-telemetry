@@ -114,7 +114,6 @@ services:
         condition: service_started
     environment:
       - RUST_LOG=debug
-      - RUST_BACKTRACE=1
       - UDP_URL=0.0.0.0
       - UDP_PORT=20777
       - KAFKA_BOOTSTRAP_SERVERS=kafka-broker:19092
