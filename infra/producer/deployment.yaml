@@ -1,69 +1,57 @@
-# apiVersion: apps/v1
-# kind: Deployment
-# metadata:
-#   name: f1-telemetry-producer
-#   namespace: f1-telemetry
-#   labels:
-#     app: f1-telemetry-producer
-# spec:
-#   replicas: 1
-#   selector:
-#     matchLabels:
-#       app: f1-telemetry-producer
-#   template:
-#     metadata:
-#       labels:
-#         app: f1-telemetry-producer
-#     spec:
-#       containers:
-#       - name: producer
-#         image: ghcr.io/phish3y/f1-telemetry-producer:latest  # Update with your image
-#         imagePullPolicy: Always
-#         ports:
-#         - name: udp
-#           containerPort: 20777
-#           protocol: UDP
-#         env:
-#         - name: RUST_LOG
-#           value: "info"
-#         - name: UDP_URL
-#           value: "0.0.0.0"
-#         - name: UDP_PORT
-#           value: "20777"
-#         - name: KAFKA_BOOTSTRAP_SERVERS
-#           value: "10.100.80.208:9094"  # Update with your Kafka service
-#         - name: LAP_TOPIC
-#           value: "f1-telemetry-lap"
-#         - name: PARTICIPANTS_TOPIC
-#           value: "f1-telemetry-participants"
-#         - name: LOBBY_INFO_TOPIC
-#           value: "f1-telemetry-lobby-info"
-#         - name: CAR_TELEMETRY_TOPIC
-#           value: "f1-telemetry-car-telemetry"
-#         - name: OTEL_EXPORTER_OTLP_ENDPOINT
-#           value: "grpc://otel-collector:4317"
-#         resources:
-#           requests:
-#             memory: "128Mi"
-#             cpu: "100m"
-#           limits:
-#             memory: "256Mi"
-#             cpu: "500m"
-# ---
-# apiVersion: v1
-# kind: Service
-# metadata:
-#   name: f1-telemetry-producer
-#   namespace: default
-#   labels:
-#     app: f1-telemetry-producer
-# spec:
-#   type: LoadBalancer  # Use NodePort if LoadBalancer not available
-#   selector:
-#     app: f1-telemetry-producer
-#   ports:
-#   - name: udp
-#     port: 20777
-#     targetPort: 20777
-#     protocol: UDP
-#     # nodePort: 30777  # Uncomment if using NodePort
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: f1-telemetry-producer
+  namespace: f1-telemetry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: f1-telemetry-producer
+  template:
+    metadata:
+      labels:
+        app: f1-telemetry-producer
+    spec:
+      containers:
+      - name: producer
+        image: ghcr.io/phish3y/f1-telemetry-producer:88ced8cb5e4508bb6b31d4a5f284c7f1c7ac744b
+        imagePullPolicy: Always
+        ports:
+        - name: udp
+          containerPort: 20777
+          protocol: UDP
+        env:
+        - name: RUST_LOG
+          value: "info"
+        - name: UDP_URL
+          value: "0.0.0.0"
+        - name: UDP_PORT
+          value: "20777"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "10.100.80.208:9094"
+        - name: LAP_TOPIC
+          value: "f1-telemetry-lap"
+        - name: PARTICIPANTS_TOPIC
+          value: "f1-telemetry-participants"
+        - name: LOBBY_INFO_TOPIC
+          value: "f1-telemetry-lobby-info"
+        - name: CAR_TELEMETRY_TOPIC
+          value: "f1-telemetry-car-telemetry"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "grpc://otel-collector:4317"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: f1-telemetry-producer
+  namespace: f1-telemetry
+spec:
+  type: LoadBalancer
+  selector:
+    app: f1-telemetry-producer
+  ports:
+  - name: udp
+    port: 20777
+    targetPort: 20777
+    protocol: UDP

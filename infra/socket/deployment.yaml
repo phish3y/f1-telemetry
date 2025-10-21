@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: f1-telemetry-socket
+  namespace: f1-telemetry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: f1-telemetry-socket
+  template:
+    metadata:
+      labels:
+        app: f1-telemetry-socket
+    spec:
+      containers:
+      - name: socket
+        image: ghcr.io/phish3y/f1-telemetry-socket:88ced8cb5e4508bb6b31d4a5f284c7f1c7ac744b
+        imagePullPolicy: Always
+        ports:
+        - name: websocket
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: RUST_LOG
+          value: "info"
+        - name: SOCKET_URL
+          value: "0.0.0.0"
+        - name: SOCKET_PORT
+          value: "8080"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "10.100.80.208:9094"
+        - name: SPEED_AGGREGATION_TOPIC
+          value: "speed-aggregation"
+        - name: RPM_AGGREGATION_TOPIC
+          value: "rpm-aggregation"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: f1-telemetry-socket
+  namespace: f1-telemetry
+spec:
+  type: ClusterIP
+  selector:
+    app: f1-telemetry-socket
+  ports:
+  - name: websocket
+    port: 8080
+    targetPort: 8080
+    protocol: TCP

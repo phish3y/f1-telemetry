@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: f1-telemetry-web
+  namespace: f1-telemetry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: f1-telemetry-web
+  template:
+    metadata:
+      labels:
+        app: f1-telemetry-web
+    spec:
+      containers:
+      - name: nginx
+        image: ghcr.io/phish3y/f1-telemetry-web:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: f1-telemetry-web
+  namespace: f1-telemetry
+spec:
+  type: ClusterIP
+  selector:
+    app: f1-telemetry-web
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    protocol: TCP
