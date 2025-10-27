@@ -33,7 +33,7 @@ spec:
       - name: WAREHOUSE_PATH
         value: /opt/warehouse
       - name: OTEL_EXPORTER_OTLP_ENDPOINT
-        value: http://otel-collector:4317
+        value: grpc://otel-collector:4317
       - name: OTEL_TRACES_EXPORTER
         value: otlp
       - name: OTEL_LOGS_EXPORTER
@@ -51,7 +51,7 @@ spec:
   executor:
     cores: 2
     instances: 4
-    memory: 2G
+    memory: 1G
     labels:
       version: 3.5.6
     serviceAccount: spark-operator-spark
