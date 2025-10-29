@@ -35,9 +35,6 @@ const latestRpmData = ref<RPMAggregation | null>(null)
 
 const connectWebSocket = () => {
   try {
-    // Use /ws path - works in both local and Kubernetes
-    // Local: nginx proxies /ws to socket:8080
-    // Kubernetes: Ingress routes /ws to socket service
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     websocket = new WebSocket(`${protocol}//${window.location.host}/socket`)
 
