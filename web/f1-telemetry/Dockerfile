@@ -9,6 +9,8 @@ RUN npm run build
 
 FROM nginx:1.29-bookworm
 
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
+
 RUN rm /etc/nginx/conf.d/default.conf
 
 COPY nginx/nginx-local.conf /etc/nginx/nginx-local.conf
