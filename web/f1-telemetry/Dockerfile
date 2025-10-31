@@ -10,9 +10,12 @@ RUN npm run build
 FROM nginx:1.29-bookworm
 
 RUN rm /etc/nginx/conf.d/default.conf
-COPY nginx/nginx.conf /etc/nginx/conf.d/
+
+COPY nginx/nginx-local.conf /etc/nginx/nginx-local.conf
+COPY nginx/nginx-k8s.conf /etc/nginx/nginx-k8s.conf
+
+RUN ln -s /etc/nginx/nginx-k8s.conf /etc/nginx/conf.d/default.conf
 
 COPY --from=vue-builder /app/dist /usr/share/nginx/html
 
-# TODO
 CMD ["nginx", "-g", "daemon off;"]
