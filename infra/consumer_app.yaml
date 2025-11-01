@@ -44,6 +44,16 @@ spec:
         value: service.name=f1-telemetry-consumer,telemetry.sdk.language=scala
       - name: OTEL_EXPORTER_OTLP_PROTOCOL
         value: grpc
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: spark-apps
+            key: aws-access-key-id
+      - name: AWS_SECRET_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: spark-apps
+            key: aws-secret-access-key
     volumeMounts:
       - name: f1-telemetry-warehouse
         mountPath: /opt/warehouse
