@@ -65,6 +65,17 @@ spec:
     labels:
       version: 3.5.6
     serviceAccount: spark-operator-spark
+    env:
+      - name: AWS_ACCESS_KEY_ID
+        valueFrom:
+          secretKeyRef:
+            name: spark-apps
+            key: aws-access-key-id
+      - name: AWS_SECRET_ACCESS_KEY
+        valueFrom:
+          secretKeyRef:
+            name: spark-apps
+            key: aws-secret-access-key
     volumeMounts:
       - name: f1-telemetry-warehouse
         mountPath: /opt/warehouse
