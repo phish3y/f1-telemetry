@@ -1,4 +1,6 @@
-FROM rust:1.88 AS builder
+FROM rust:1.88 as builder
+
+RUN apt-get update && apt-get install -y cmake
 
 WORKDIR /usr/src/api
 

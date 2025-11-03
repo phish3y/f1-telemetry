@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
-pub enum SocketMessage {
+pub enum SSEMessage {
     #[serde(rename = "speed")]
     Speed(SpeedAggregation),
     #[serde(rename = "rpm")]

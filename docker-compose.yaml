@@ -159,15 +159,15 @@ services:
     networks:
       - f1-network
 
-  socket:
-    container_name: socket
+  api:
+    container_name: api
     build:
-      context: socket
+      context: api
       dockerfile: Dockerfile
     environment:
       - RUST_LOG=debug
-      - SOCKET_URL=0.0.0.0
-      - SOCKET_PORT=8080
+      - API_URL=0.0.0.0
+      - API_PORT=3000
       - KAFKA_BOOTSTRAP_SERVERS=kafka-broker:19092
       - SPEED_AGGREGATION_TOPIC=speed-aggregation
       - RPM_AGGREGATION_TOPIC=rpm-aggregation
@@ -177,18 +177,18 @@ services:
     networks:
       - f1-network
 
-  api:
-    container_name: api
-    build:
-      context: api
-      dockerfile: Dockerfile
-    environment:
-      - API_PORT=3000
-      - WAREHOUSE_PATH=/opt/warehouse
-    volumes:
-      - ./warehouse:/opt/warehouse
-    networks:
-      - f1-network
+  # api:
+  #   container_name: api
+  #   build:
+  #     context: api
+  #     dockerfile: Dockerfile
+  #   environment:
+  #     - API_PORT=3000
+  #     - WAREHOUSE_PATH=/opt/warehouse
+  #   volumes:
+  #     - ./warehouse:/opt/warehouse
+  #   networks:
+  #     - f1-network
 
   web:
     container_name: web
@@ -202,7 +202,7 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - socket
+      - api
     networks:
       - f1-network
 

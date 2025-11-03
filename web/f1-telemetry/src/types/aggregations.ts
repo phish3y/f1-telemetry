@@ -18,7 +18,7 @@ export interface RPMAggregation {
   sample_count: number
 }
 
-export interface SocketMessage {
+export interface SSEMessage {
   type: 'speed' | 'rpm'
   data: SpeedAggregation | RPMAggregation
 }

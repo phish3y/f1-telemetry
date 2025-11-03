@@ -1,4 +1,4 @@
-name: socket-image
+name: api-image
 on:
   push:
     branches:
@@ -23,8 +23,8 @@ jobs:
         id: build
         uses: docker/build-push-action@v3
         with:
-          context: socket
-          file: socket/Dockerfile
+          context: api
+          file: api/Dockerfile
           push: true
           tags: |
-            ghcr.io/phish3y/f1-telemetry-socket:${{ github.sha }}
+            ghcr.io/phish3y/f1-telemetry-api:${{ github.sha }}

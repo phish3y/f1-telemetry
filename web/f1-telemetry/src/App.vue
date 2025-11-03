@@ -23,9 +23,9 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import SpeedChart from './components/SpeedChart.vue'
 import RPMChart from './components/RPMChart.vue'
-import type { SpeedAggregation, RPMAggregation, SocketMessage } from './types/aggregations'
+import type { SpeedAggregation, RPMAggregation, SSEMessage } from './types/aggregations'
 
-let websocket: WebSocket | null = null
+let eventSource: EventSource | null = null
 
 const isConnected = ref(false)
 const connectionError = ref<string | null>(null)
@@ -33,19 +33,18 @@ const connectionError = ref<string | null>(null)
 const latestSpeedData = ref<SpeedAggregation | null>(null)
 const latestRpmData = ref<RPMAggregation | null>(null)
 
-const connectWebSocket = () => {
+const connectSSE = () => {
   try {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    websocket = new WebSocket(`${protocol}//${window.location.host}/socket`)
+    eventSource = new EventSource('/api/events')
 
-    websocket.onopen = () => {
+    eventSource.onopen = () => {
       isConnected.value = true
       connectionError.value = null
     }
 
-    websocket.onmessage = (event) => {
+    eventSource.onmessage = (event) => {
       try {
-        const message: SocketMessage = JSON.parse(event.data)
+        const message: SSEMessage = JSON.parse(event.data)
 
         if (message.type === 'speed') {
           latestSpeedData.value = message.data as SpeedAggregation
@@ -58,38 +57,36 @@ const connectWebSocket = () => {
       }
     }
 
-    websocket.onclose = () => {
+    eventSource.onerror = (error) => {
+      console.error('SSE error:', error)
       isConnected.value = false
 
-      setTimeout(() => {
-        connectWebSocket()
-      }, 3000)
-    }
-
-    websocket.onerror = (error) => {
-      console.error('socket error:', error)
-      connectionError.value = 'socket connection failed'
-      isConnected.value = false
+      if (eventSource?.readyState === EventSource.CLOSED) {
+        connectionError.value = 'SSE connection failed'
+        setTimeout(() => {
+          connectSSE()
+        }, 3000)
+      }
     }
   } catch (error) {
-    console.error('failed to create socket connection:', error)
-    connectionError.value = 'failed to create socket connection'
+    console.error('failed to create SSE connection:', error)
+    connectionError.value = 'failed to create SSE connection'
   }
 }
 
-const disconnectWebSocket = () => {
-  if (websocket) {
-    websocket.close()
-    websocket = null
+const disconnectSSE = () => {
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
   }
 }
 
 onMounted(() => {
-  connectWebSocket()
+  connectSSE()
 })
 
 onUnmounted(() => {
-  disconnectWebSocket()
+  disconnectSSE()
 })
 </script>
 

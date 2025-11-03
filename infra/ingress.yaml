@@ -14,20 +14,20 @@ spec:
   - host: f1.phish3y.cc
     http:
       paths:
-      - path: /socket
+      - path: /api
         pathType: Prefix
         backend:
           service:
-            name: f1-telemetry-socket
+            name: f1-telemetry-api
             port:
-              number: 8080
+              number: 3000
       - path: /
         pathType: Prefix
         backend:
           service:
             name: f1-telemetry-web
             port:
-              number: 80
+              number: 3000
   tls:
   - hosts:
     - f1.phish3y.cc

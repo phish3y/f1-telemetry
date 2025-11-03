@@ -3,7 +3,7 @@
 F1 Telemetry is a streaming data platform that captures, processes, and visualizes Formula 1 game telemetry data in real-time
 
 ### Tech
-- Rust (UDP parsing + Web Socket)
+- Rust (UDP parsing + API)
 - Apache Spark with Scala
 - Apache Kafka
 - Apache Iceberg
