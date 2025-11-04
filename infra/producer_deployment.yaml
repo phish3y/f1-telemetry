@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: producer
-        image: ghcr.io/phish3y/f1-telemetry-producer:88ced8cb5e4508bb6b31d4a5f284c7f1c7ac744b
+        image: ghcr.io/phish3y/f1-telemetry-producer:49b332f995360cb6fe1d5c71c362cdec11a24fd3
         imagePullPolicy: Always
         ports:
         - name: udp
