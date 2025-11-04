@@ -27,7 +27,7 @@ spec:
           service:
             name: f1-telemetry-web
             port:
-              number: 3000
+              number: 80
   tls:
   - hosts:
     - f1.phish3y.cc
