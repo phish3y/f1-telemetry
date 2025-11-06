@@ -13,9 +13,9 @@ ADD https://repo1.maven.org/maven2/org/apache/spark/spark-token-provider-kafka-0
 ADD https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.5.2/kafka-clients-3.5.2.jar $SPARK_HOME/jars
 # Iceberg
 ADD https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-3.5_2.12/1.10.0/iceberg-spark-runtime-3.5_2.12-1.10.0.jar $SPARK_HOME/jars
-# OTEL
-ADD https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-api/1.54.1/opentelemetry-api-1.54.1.jar $SPARK_HOME/jars
-ADD https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-context/1.54.1/opentelemetry-context-1.54.1.jar $SPARK_HOME/jars
+# OTEL - Updated to match java agent 2.20.1
+ADD https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-api/1.46.0/opentelemetry-api-1.46.0.jar $SPARK_HOME/jars
+ADD https://repo1.maven.org/maven2/io/opentelemetry/opentelemetry-context/1.46.0/opentelemetry-context-1.46.0.jar $SPARK_HOME/jars
 # AWS
 ADD https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar $SPARK_HOME/jars
 ADD https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.782/aws-java-sdk-bundle-1.12.782.jar $SPARK_HOME/jars

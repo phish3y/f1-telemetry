@@ -8,6 +8,7 @@ import org.apache.spark.sql.SparkSession
 case class LobbyInfo(
     timestamp: java.sql.Timestamp,
     session_uid: Long,
+    session_time: Float,
     car_index: Int,
     ai_controlled: Int,
     team_id: Int,
@@ -15,9 +16,7 @@ case class LobbyInfo(
     name: String,
     car_number: Int,
     platform: Int,
-    ready_status: Int,
-    date: Int,
-    hour: Int
+    ready_status: Int
 )
 
 case class TracedLobbyInfo(
@@ -36,12 +35,14 @@ object LobbyInfo {
       .select(
         col("timestamp"),
         col("_1.m_header.m_session_uid").as("session_uid"),
+        col("_1.m_header.m_session_time").as("session_time"),
         posexplode(col("_1.m_lobby_players")).as(Seq("car_index", "lobby_data")),
         col("_2").as("traceparent")
       )
       .select(
         col("timestamp"),
         col("session_uid"),
+        col("session_time"),
         col("car_index"),
         col("lobby_data.m_ai_controlled").as("ai_controlled"),
         col("lobby_data.m_team_id").as("team_id"),
@@ -54,17 +55,16 @@ object LobbyInfo {
         col("lobby_data.m_car_number").as("car_number"),
         col("lobby_data.m_platform").as("platform"),
         col("lobby_data.m_ready_status").as("ready_status"),
-        date_format(col("timestamp"), "yyyyMMdd").cast("int").as("date"),
-        hour(col("timestamp")).as("hour"),
         col("traceparent")
       )
-      .as[(java.sql.Timestamp, Long, Int, Int, Int, Int, String, Int, Int, Int, Int, Int, String)]
-      .map { case (timestamp, session_uid, car_index, ai_controlled, team_id, nationality, 
-                    name, car_number, platform, ready_status, date, hour, traceparent) =>
+      .as[(java.sql.Timestamp, Long, Float, Int, Int, Int, Int, String, Int, Int, Int, String)]
+      .map { case (timestamp, session_uid, session_time, car_index, ai_controlled, team_id, nationality, 
+                    name, car_number, platform, ready_status, traceparent) =>
         TracedLobbyInfo(
           packet = LobbyInfo(
             timestamp = timestamp,
             session_uid = session_uid,
+            session_time = session_time,
             car_index = car_index,
             ai_controlled = ai_controlled,
             team_id = team_id,
@@ -72,9 +72,7 @@ object LobbyInfo {
             name = name,
             car_number = car_number,
             platform = platform,
-            ready_status = ready_status,
-            date = date,
-            hour = hour
+            ready_status = ready_status
           ),
           traceparent = traceparent
         )

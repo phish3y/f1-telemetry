@@ -1,9 +1,7 @@
 <template>
   <div class="speed-chart-container">
     <div class="window-header">
-      <span class="window-title">
-        Speed Analysis{{ currentSessionId ? ` for Session ${currentSessionId}` : '' }}
-      </span>
+      <span class="window-title">Speed Analysis</span>
     </div>
     <div class="chart-content">
       <Line :data="chartData" :options="chartOptions" :height="280" />
@@ -57,13 +55,6 @@ watch(
     }
   },
 )
-
-const currentSessionId = computed(() => {
-  if (speedDataHistory.value.length > 0) {
-    return speedDataHistory.value[speedDataHistory.value.length - 1].session_uid
-  }
-  return null
-})
 
 const maxDataPoints = 20
 

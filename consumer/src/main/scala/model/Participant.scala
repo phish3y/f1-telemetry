@@ -8,6 +8,7 @@ import org.apache.spark.sql.SparkSession
 case class Participant(
     timestamp: java.sql.Timestamp,
     session_uid: Long,
+    session_time: Float,
     car_index: Int,
     ai_controlled: Int,
     driver_id: Int,
@@ -15,9 +16,7 @@ case class Participant(
     race_number: Int,
     nationality: Int,
     name: String,
-    platform: Int,
-    date: Int,
-    hour: Int
+    platform: Int
 )
 
 case class TracedParticipant(
@@ -36,12 +35,14 @@ object Participant {
       .select(
         col("timestamp"),
         col("_1.m_header.m_session_uid").as("session_uid"),
+        col("_1.m_header.m_session_time").as("session_time"),
         posexplode(col("_1.m_participants")).as(Seq("car_index", "participant_data")),
         col("_2").as("traceparent")
       )
       .select(
         col("timestamp"),
         col("session_uid"),
+        col("session_time"),
         col("car_index"),
         col("participant_data.m_ai_controlled").as("ai_controlled"),
         col("participant_data.m_driver_id").as("driver_id"),
@@ -54,17 +55,16 @@ object Participant {
           ""
         ).as("name"),
         col("participant_data.m_platform").as("platform"),
-        date_format(col("timestamp"), "yyyyMMdd").cast("int").as("date"),
-        hour(col("timestamp")).as("hour"),
         col("traceparent")
       )
-      .as[(java.sql.Timestamp, Long, Int, Int, Int, Int, Int, Int, String, Int, Int, Int, String)]
-      .map { case (timestamp, session_uid, car_index, ai_controlled, driver_id, team_id, 
-                    race_number, nationality, name, platform, date, hour, traceparent) =>
+      .as[(java.sql.Timestamp, Long, Float, Int, Int, Int, Int, Int, Int, String, Int, String)]
+      .map { case (timestamp, session_uid, session_time, car_index, ai_controlled, driver_id, team_id, 
+                    race_number, nationality, name, platform, traceparent) =>
         TracedParticipant(
           packet = Participant(
             timestamp = timestamp,
             session_uid = session_uid,
+            session_time = session_time,
             car_index = car_index,
             ai_controlled = ai_controlled,
             driver_id = driver_id,
@@ -72,9 +72,7 @@ object Participant {
             race_number = race_number,
             nationality = nationality,
             name = name,
-            platform = platform,
-            date = date,
-            hour = hour
+            platform = platform
           ),
           traceparent = traceparent
         )

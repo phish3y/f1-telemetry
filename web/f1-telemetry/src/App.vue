@@ -10,6 +10,16 @@
     </div>
 
     <div class="main-content">
+      <div class="session-info">
+        <div class="session-info-item">
+          <span class="session-label">Session ID:</span>
+          <span class="session-value">{{ currentSessionUid ?? '--' }}</span>
+        </div>
+        <div class="session-info-item">
+          <span class="session-label">Session Time:</span>
+          <span class="session-value">{{ formatSessionTime(currentSessionTime) }}</span>
+        </div>
+      </div>
       <div class="charts-container">
         <SpeedChart :latest-speed-data="latestSpeedData" />
         <RPMChart :latest-rpm-data="latestRpmData" />
@@ -20,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import SpeedChart from './components/SpeedChart.vue'
 import RPMChart from './components/RPMChart.vue'
 import type { SpeedAggregation, RPMAggregation, SSEMessage } from './types/aggregations'
@@ -32,6 +42,24 @@ const connectionError = ref<string | null>(null)
 
 const latestSpeedData = ref<SpeedAggregation | null>(null)
 const latestRpmData = ref<RPMAggregation | null>(null)
+
+const currentSessionUid = computed(() => {
+  return latestSpeedData.value?.session_uid ?? latestRpmData.value?.session_uid ?? null
+})
+
+const currentSessionTime = computed(() => {
+  return latestSpeedData.value?.session_time ?? latestRpmData.value?.session_time ?? null
+})
+
+const formatSessionTime = (seconds: number | null): string => {
+  if (seconds === null) return '--:--:--'
+
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
 
 const connectSSE = () => {
   try {
@@ -149,6 +177,36 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.session-info {
+  background: linear-gradient(180deg, #dfdfdf 0%, #c0c0c0 100%);
+  border: 1px solid #808080;
+  border-radius: 2px;
+  padding: 8px 12px;
+  display: flex;
+  gap: 24px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.session-info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.session-label {
+  font-size: 10px;
+  font-weight: bold;
+  color: #333333;
+  text-transform: uppercase;
+}
+
+.session-value {
+  font-size: 11px;
+  font-weight: bold;
+  color: #000080;
+  font-family: 'Courier New', monospace;
 }
 
 .charts-container {

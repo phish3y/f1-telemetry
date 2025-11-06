@@ -1,4 +1,4 @@
-use std::{convert::Infallible, time::Duration};
+use std::{convert::Infallible, sync::Arc, time::Duration};
 
 use axum::{
     extract::State,
@@ -9,6 +9,7 @@ use axum::{
     routing::get,
     Router,
 };
+use duckdb::Connection;
 use futures_util::{stream::Stream, StreamExt as _};
 use rdkafka::{
     consumer::{Consumer, StreamConsumer},
@@ -28,6 +29,38 @@ mod sse_message;
 #[derive(Clone)]
 struct AppState {
     broadcast_tx: broadcast::Sender<String>,
+    warehouse_path: Arc<String>,
+}
+
+impl AppState {
+    async fn new(broadcast_tx: broadcast::Sender<String>) -> Result<Self, InitializationError> {
+        let warehouse_path = std::env::var("WAREHOUSE_PATH")
+            .unwrap_or_else(|_| "/opt/warehouse".to_string());
+            
+        let setup_conn = Connection::open("api_warehouse.db")
+            .map_err(|e| InitializationError::DatabaseOpen(e.to_string()))?;
+        
+        setup_conn.execute_batch("
+            INSTALL iceberg;
+        ").map_err(|e| InitializationError::IcebergInstall(e.to_string()))?;
+        
+        log::info!("DuckDB warehouse database initialized at: {}", warehouse_path);
+        
+        Ok(AppState {
+            broadcast_tx,
+            warehouse_path: Arc::new(warehouse_path),
+        })
+    }
+    
+    fn create_connection(&self) -> Result<Connection, InitializationError> {
+        let conn = Connection::open("api_warehouse.db")
+            .map_err(|e| InitializationError::DatabaseOpen(e.to_string()))?;
+        
+        conn.execute_batch("LOAD iceberg;")
+            .map_err(|e| InitializationError::IcebergLoad(e.to_string()))?;
+        
+        Ok(conn)
+    }
 }
 
 #[tokio::main]
@@ -46,9 +79,7 @@ async fn main() {
 
     let (tx, _) = broadcast::channel::<String>(1000);
 
-    let state = AppState {
-        broadcast_tx: tx.clone(),
-    };
+    let state = AppState::new(tx.clone()).await.unwrap();
 
     let bsc = bootstrap_servers.clone();
     let satc = speed_aggregation_topic.clone();
@@ -158,17 +189,17 @@ async fn consume_speed(
     bootstrap_servers: &str,
     topic: &str,
     broadcast_tx: broadcast::Sender<String>,
-) -> Result<(), KafkaConsumptionException> {
+) -> Result<(), KafkaConsumptionError> {
     let consumer: StreamConsumer = ClientConfig::new()
         .set("group.id", "f1-api-server-speed")
         .set("bootstrap.servers", bootstrap_servers)
         .set("auto.offset.reset", "latest")
         .create()
-        .map_err(|e| KafkaConsumptionException::ConsumerCreation(e.to_string()))?;
+        .map_err(|e| KafkaConsumptionError::ConsumerCreation(e.to_string()))?;
 
     consumer
         .subscribe(&[&topic])
-        .map_err(|e| KafkaConsumptionException::TopicSubscription(e.to_string()))?;
+        .map_err(|e| KafkaConsumptionError::TopicSubscription(e.to_string()))?;
 
     loop {
         match consumer.recv().await {
@@ -225,17 +256,17 @@ async fn consume_rpm(
     bootstrap_servers: &str,
     topic: &str,
     broadcast_tx: broadcast::Sender<String>,
-) -> Result<(), KafkaConsumptionException> {
+) -> Result<(), KafkaConsumptionError> {
     let consumer: StreamConsumer = ClientConfig::new()
         .set("group.id", "f1-api-server-rpm")
         .set("bootstrap.servers", bootstrap_servers)
         .set("auto.offset.reset", "latest")
         .create()
-        .map_err(|e| KafkaConsumptionException::ConsumerCreation(e.to_string()))?;
+        .map_err(|e| KafkaConsumptionError::ConsumerCreation(e.to_string()))?;
 
     consumer
         .subscribe(&[&topic])
-        .map_err(|e| KafkaConsumptionException::TopicSubscription(e.to_string()))?;
+        .map_err(|e| KafkaConsumptionError::TopicSubscription(e.to_string()))?;
 
     loop {
         match consumer.recv().await {
@@ -289,10 +320,22 @@ async fn consume_rpm(
 }
 
 #[derive(Error, Debug)]
-enum KafkaConsumptionException {
+enum KafkaConsumptionError {
     #[error("failed to create consumer: {0}")]
     ConsumerCreation(String),
 
     #[error("failed to subscribe to topic: {0}")]
     TopicSubscription(String),
+}
+
+#[derive(Error, Debug)]
+enum InitializationError {
+    #[error("failed to open DuckDB database: {0}")]
+    DatabaseOpen(String),
+    
+    #[error("failed to install Iceberg extension: {0}")]
+    IcebergInstall(String),
+    
+    #[error("failed to load Iceberg extension: {0}")]
+    IcebergLoad(String),
 }

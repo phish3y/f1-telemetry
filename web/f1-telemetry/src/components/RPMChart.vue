@@ -1,9 +1,7 @@
 <template>
   <div class="rpm-chart-container">
     <div class="window-header">
-      <span class="window-title">
-        RPM Analysis{{ currentSessionId ? ` for Session ${currentSessionId}` : '' }}
-      </span>
+      <span class="window-title">RPM Analysis</span>
     </div>
     <div class="chart-content">
       <Line :data="chartData" :options="chartOptions" :height="280" />
@@ -57,13 +55,6 @@ watch(
     }
   },
 )
-
-const currentSessionId = computed(() => {
-  if (rpmDataHistory.value.length > 0) {
-    return rpmDataHistory.value[rpmDataHistory.value.length - 1].session_uid
-  }
-  return null
-})
 
 const maxDataPoints = 20
 

@@ -11,6 +11,7 @@ case class RPMAggregation(
     window_start: java.sql.Timestamp,
     window_end: java.sql.Timestamp,
     session_uid: Long,
+    session_time: Float,
     avg_rpm: Double,
     min_rpm: Int,
     max_rpm: Int,
@@ -33,6 +34,7 @@ object RPMAggregation {
       .select(
         $"timestamp",
         $"m_header.m_session_uid".as("session_uid"),
+        $"m_header.m_session_time".as("session_time"),
         $"m_car_telemetry_data" ($"m_header.m_player_car_index")("m_engine_rpm").as("rpm"),
         $"traceparent"
       )
@@ -48,25 +50,28 @@ object RPMAggregation {
         min($"rpm").as("min_rpm"),
         max($"rpm").as("max_rpm"),
         count("*").as("sample_count"),
+        max($"session_time").as("session_time"),
         collect_set($"traceparent").as("traceparents")
       )
       .select(
         $"window.start".as("window_start"),
         $"window.end".as("window_end"),
         $"session_uid",
+        $"session_time",
         $"avg_rpm",
         $"min_rpm",
         $"max_rpm",
         $"sample_count",
         $"traceparents"
       )
-      .as[(java.sql.Timestamp, java.sql.Timestamp, Long, Double, Int, Int, Long, Seq[String])]
-      .map { case (window_start, window_end, session_uid, avg_rpm, min_rpm, max_rpm, sample_count, traceparents) =>
+      .as[(java.sql.Timestamp, java.sql.Timestamp, Long, Float, Double, Int, Int, Long, Seq[String])]
+      .map { case (window_start, window_end, session_uid, session_time, avg_rpm, min_rpm, max_rpm, sample_count, traceparents) =>
         TracedRPMAggregation(
           aggregation = RPMAggregation(
             window_start = window_start,
             window_end = window_end,
             session_uid = session_uid,
+            session_time = session_time,
             avg_rpm = avg_rpm,
             min_rpm = min_rpm,
             max_rpm = max_rpm,

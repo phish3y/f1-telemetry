@@ -23,7 +23,7 @@ spec:
           protocol: UDP
         env:
         - name: RUST_LOG
-          value: "info"
+          value: "debug"
         - name: UDP_URL
           value: "0.0.0.0"
         - name: UDP_PORT

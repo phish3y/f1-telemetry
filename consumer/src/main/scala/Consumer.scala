@@ -98,31 +98,22 @@ object Consumer {
         CREATE TABLE IF NOT EXISTS local.lap (
           timestamp timestamp,
           session_uid bigint,
-
+          session_time float,
           car_index int,
-
           current_lap_num int,
           last_lap_time_ms bigint,
           current_lap_time_ms bigint,
-
           sector1_time_ms bigint,
           sector2_time_ms bigint,
-
           car_position int,
-
           speed_trap_fastest_speed float,
-
           num_pit_stops int,
           penalties int,
           total_warnings int,
           corner_cutting_warnings int,
-
-          grid_position int,
-          
-          date int,
-          hour int
+          grid_position int
         ) USING iceberg
-        PARTITIONED BY (date, hour)
+        PARTITIONED BY (session_uid)
       """)
 
       spark.sql("""
@@ -130,14 +121,13 @@ object Consumer {
           window_start timestamp,
           window_end timestamp,
           session_uid bigint,
+          session_time float,
           avg_speed double,
           min_speed int,
           max_speed int,
-          sample_count bigint,
-          date int,
-          hour int
+          sample_count bigint
         ) USING iceberg
-        PARTITIONED BY (date, hour)
+        PARTITIONED BY (session_uid)
       """)
 
       spark.sql("""
@@ -145,21 +135,20 @@ object Consumer {
           window_start timestamp,
           window_end timestamp,
           session_uid bigint,
+          session_time float,
           avg_rpm double,
           min_rpm int,
           max_rpm int,
-          sample_count bigint,
-          date int,
-          hour int
+          sample_count bigint
         ) USING iceberg
-        PARTITIONED BY (date, hour)
+        PARTITIONED BY (session_uid)
       """)
 
       spark.sql("""
         CREATE TABLE IF NOT EXISTS local.participants (
           timestamp timestamp,
           session_uid bigint,
-
+          session_time float,
           car_index int,
           ai_controlled int,
           driver_id int,
@@ -167,19 +156,16 @@ object Consumer {
           race_number int,
           nationality int,
           name string,
-          platform int,
-          
-          date int,
-          hour int
+          platform int
         ) USING iceberg
-        PARTITIONED BY (date, hour)
+        PARTITIONED BY (session_uid)
       """)
 
       spark.sql("""
         CREATE TABLE IF NOT EXISTS local.lobby_info (
           timestamp timestamp,
           session_uid bigint,
-
+          session_time float,
           car_index int,
           ai_controlled int,
           team_id int,
@@ -187,12 +173,9 @@ object Consumer {
           name string,
           car_number int,
           platform int,
-          ready_status int,
-          
-          date int,
-          hour int
+          ready_status int
         ) USING iceberg
-        PARTITIONED BY (date, hour)
+        PARTITIONED BY (session_uid)
       """)
     }
 
@@ -230,8 +213,6 @@ object Consumer {
         import batchDF.sparkSession.implicits._
         val aggregations = batchDF.map(_.aggregation)
         aggregations
-          .withColumn("date", date_format($"window_start", "yyyyMMdd").cast("int"))
-          .withColumn("hour", hour($"window_start"))
           .write
           .format("iceberg")
           .mode("append")
@@ -253,8 +234,6 @@ object Consumer {
         import batchDF.sparkSession.implicits._
         val aggregations = batchDF.map(_.aggregation)
         aggregations
-          .withColumn("date", date_format($"window_start", "yyyyMMdd").cast("int"))
-          .withColumn("hour", hour($"window_start"))
           .write
           .format("iceberg")
           .mode("append")

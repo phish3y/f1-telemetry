@@ -22,7 +22,7 @@ spec:
           protocol: TCP
         env:
         - name: RUST_LOG
-          value: "info"
+          value: "debug"
         - name: API_URL
           value: "0.0.0.0"
         - name: API_PORT
