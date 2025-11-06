@@ -36,7 +36,8 @@ object Participant {
         col("timestamp"),
         col("_1.m_header.m_session_uid").as("session_uid"),
         col("_1.m_header.m_session_time").as("session_time"),
-        posexplode(col("_1.m_participants")).as(Seq("car_index", "participant_data")),
+        col("_1.m_header.m_player_car_index").as("car_index"),
+        col("_1.m_participants")(col("_1.m_header.m_player_car_index")).as("participant_data"),
         col("_2").as("traceparent")
       )
       .select(

@@ -43,7 +43,8 @@ object Lap {
         col("timestamp"),
         col("_1.m_header.m_session_uid").as("session_uid"),
         col("_1.m_header.m_session_time").as("session_time"),
-        posexplode(col("_1.m_lap_data")).as(Seq("car_index", "lap_data")),
+        col("_1.m_header.m_player_car_index").as("car_index"),
+        col("_1.m_lap_data")(col("_1.m_header.m_player_car_index")).as("lap_data"),
         col("_2").as("traceparent")
       )
       .select(
