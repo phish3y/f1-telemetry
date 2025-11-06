@@ -209,6 +209,7 @@ async fn consume_speed(
             }
             Ok(message) => {
                 if let Some(payload) = message.payload() {
+                    log::debug!("received speed message from kafka");
                     match std::str::from_utf8(payload) {
                         Err(e) => {
                             log::error!("failed to decode speed message payload as UTF-8: {}", e);
@@ -220,7 +221,6 @@ async fn consume_speed(
                                         "failed to deserialize speed aggregation from kafka: {}",
                                         e
                                     );
-                                    log::debug!("invalid speed payload: {}", payload_str);
                                 }
                                 Ok(speed_data) => {
                                     let telemetry_message = SSEMessage::Speed(speed_data);
@@ -276,6 +276,7 @@ async fn consume_rpm(
             }
             Ok(message) => {
                 if let Some(payload) = message.payload() {
+                    log::debug!("received rpm message from kafka");
                     match std::str::from_utf8(payload) {
                         Err(e) => {
                             log::error!("failed to decode rpm message payload as UTF-8: {}", e);
@@ -287,7 +288,6 @@ async fn consume_rpm(
                                         "failed to deserialize rpm aggregation from kafka: {}",
                                         e
                                     );
-                                    log::debug!("invalid rpm payload: {}", payload_str);
                                 }
                                 Ok(rpm_data) => {
                                     let telemetry_message = SSEMessage::Rpm(rpm_data);
