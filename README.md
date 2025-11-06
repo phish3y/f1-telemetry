@@ -22,3 +22,7 @@ make up
 - F1 Dashboard: http://localhost:80
 - Spark Dashboard: http://localhost:81
 - Jaeger Dashboard: http://localhost:82
+
+### TODO
+- expose spark UI
+- balance topic partitions with size of spark cluster
