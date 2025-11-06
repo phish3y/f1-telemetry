@@ -7,7 +7,7 @@ import io.opentelemetry.api.trace.{SpanKind, SpanContext, TraceFlags, TraceState
 
 trait TracedPacket[T] {
   def packet: T
-  def traceparent: String
+  def traceparent: Option[String]
 }
 
 object TracedPacket {
@@ -21,7 +21,13 @@ object TracedPacket {
   )(implicit encoder: org.apache.spark.sql.Encoder[T]): Unit = {
     val tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME)
     
-    val uniqueTraceparents = batchDF.select("traceparent").distinct().collect().map(_.getString(0))
+    val uniqueTraceparents = batchDF
+      .select("traceparent")
+      .filter(col("traceparent").isNotNull)
+      .distinct()
+      .collect()
+      .map(_.getString(0))
+    
     uniqueTraceparents.foreach { traceparent =>
       val spanBuilder = tracer.spanBuilder(spanName)
         .setSpanKind(SpanKind.CONSUMER)

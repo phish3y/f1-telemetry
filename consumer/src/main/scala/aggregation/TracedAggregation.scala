@@ -30,36 +30,40 @@ object TracedAggregation {
     import batchDF.sparkSession.implicits._
     
     batchDF.collect().foreach { traced =>
-      val spanBuilder = tracer.spanBuilder(spanName)
-        .setSpanKind(SpanKind.CONSUMER)
+      val validTraceparents = traced.traceparents.filter(_ != null)
       
-      // Add links to all producer spans that contributed to this aggregation
-      traced.traceparents.foreach { traceparent =>
-        val parts = traceparent.split("-")
-        require(parts.length == 4, s"invalid traceparent format: $traceparent")
+      if (validTraceparents.nonEmpty) {
+        val spanBuilder = tracer.spanBuilder(spanName)
+          .setSpanKind(SpanKind.CONSUMER)
         
-        val traceId = parts(1)
-        val spanId = parts(2)
+        // Add links to all producer spans that contributed to this aggregation
+        validTraceparents.foreach { traceparent =>
+          val parts = traceparent.split("-")
+          require(parts.length == 4, s"invalid traceparent format: $traceparent")
+          
+          val traceId = parts(1)
+          val spanId = parts(2)
+          
+          val remoteSpanContext = SpanContext.createFromRemoteParent(
+            traceId,
+            spanId,
+            TraceFlags.getSampled(),
+            TraceState.getDefault()
+          )
+          
+          spanBuilder.addLink(remoteSpanContext)
+        }
         
-        val remoteSpanContext = SpanContext.createFromRemoteParent(
-          traceId,
-          spanId,
-          TraceFlags.getSampled(),
-          TraceState.getDefault()
-        )
+        val span = spanBuilder.startSpan()
         
-        spanBuilder.addLink(remoteSpanContext)
+        span.setAttribute("session_uid", traced.aggregation.session_uid)
+        span.setAttribute("window_start", traced.aggregation.window_start.toString)
+        span.setAttribute("window_end", traced.aggregation.window_end.toString)
+        span.setAttribute("sample_count", traced.aggregation.sample_count)
+        
+        span.addEvent(s"${spanName}_complete")
+        span.end()
       }
-      
-      val span = spanBuilder.startSpan()
-      
-      span.setAttribute("session_uid", traced.aggregation.session_uid)
-      span.setAttribute("window_start", traced.aggregation.window_start.toString)
-      span.setAttribute("window_end", traced.aggregation.window_end.toString)
-      span.setAttribute("sample_count", traced.aggregation.sample_count)
-      
-      span.addEvent(s"${spanName}_complete")
-      span.end()
     }
     
     batchDF

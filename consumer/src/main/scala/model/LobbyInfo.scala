@@ -21,7 +21,7 @@ case class LobbyInfo(
 
 case class TracedLobbyInfo(
     packet: LobbyInfo,
-    traceparent: String
+    traceparent: Option[String]
 ) extends TracedPacket[LobbyInfo]
 
 object LobbyInfo {
@@ -74,7 +74,7 @@ object LobbyInfo {
             platform = platform,
             ready_status = ready_status
           ),
-          traceparent = traceparent
+          traceparent = Option(traceparent)
         )
       }
   }

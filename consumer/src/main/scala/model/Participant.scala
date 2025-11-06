@@ -21,7 +21,7 @@ case class Participant(
 
 case class TracedParticipant(
     packet: Participant,
-    traceparent: String
+    traceparent: Option[String]
 ) extends TracedPacket[Participant]
 
 object Participant {
@@ -74,7 +74,7 @@ object Participant {
             name = name,
             platform = platform
           ),
-          traceparent = traceparent
+          traceparent = Option(traceparent)
         )
       }
   }

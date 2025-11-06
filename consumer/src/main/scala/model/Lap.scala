@@ -28,7 +28,7 @@ case class Lap(
 
 case class TracedLap(
     packet: Lap,
-    traceparent: String
+    traceparent: Option[String]
 ) extends TracedPacket[Lap]
 
 object Lap {
@@ -93,7 +93,7 @@ object Lap {
             corner_cutting_warnings = corner_cutting_warnings,
             grid_position = grid_position
           ),
-          traceparent = traceparent
+          traceparent = Option(traceparent)
         )
       }
   }
