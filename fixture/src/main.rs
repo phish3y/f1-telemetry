@@ -236,7 +236,8 @@ fn main() {
                 m_mfd_panel_index_secondary_player: 255,
                 m_suggested_gear: 7,
             };
-            socket.send_to(bytemuck::bytes_of(&car_packet), "127.0.0.1:20777").unwrap();
+            // socket.send_to(bytemuck::bytes_of(&car_packet), "127.0.0.1:20777").unwrap();
+            socket.send_to(bytemuck::bytes_of(&car_packet), "192.168.0.135:20777").unwrap();
             println!("sent car telemetry packet");
         }
 

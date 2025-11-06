@@ -30,9 +30,9 @@ spec:
         - name: KAFKA_BOOTSTRAP_SERVERS
           value: "10.100.80.208:9094"
         - name: SPEED_AGGREGATION_TOPIC
-          value: "speed-aggregation"
+          value: "f1-telemetry-speed-aggregation"
         - name: RPM_AGGREGATION_TOPIC
-          value: "rpm-aggregation"
+          value: "f1-telemetry-rpm-aggregation"
 ---
 apiVersion: v1
 kind: Service
