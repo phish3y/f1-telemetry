@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: ghcr.io/phish3y/f1-telemetry-api:49b332f995360cb6fe1d5c71c362cdec11a24fd3
+        image: ghcr.io/phish3y/f1-telemetry-api:286055138d6acd36f418001e6aa91c89511f98b5
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
