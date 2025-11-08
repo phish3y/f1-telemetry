@@ -6,7 +6,7 @@ metadata:
 spec:
   type: Scala
   mode: cluster
-  image: ghcr.io/phish3y/f1-telemetry-spark:5d865c05eadcfa52be8ad5052d6400aef98077ea
+  image: ghcr.io/phish3y/f1-telemetry-spark:a0584acaf8c6af825de2ef4bcb70f1fd1bec3755
   mainClass: Consumer
   mainApplicationFile: s3a://f1-telemetry-artifacts/consumer_2.12-1.0.jar
   driver:

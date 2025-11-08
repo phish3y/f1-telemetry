@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: ghcr.io/phish3y/f1-telemetry-web:68af2c8563795165dd91e1b97bb378d7a367b865
+        image: ghcr.io/phish3y/f1-telemetry-web:a0584acaf8c6af825de2ef4bcb70f1fd1bec3755
         imagePullPolicy: Always
         ports:
         - name: http
