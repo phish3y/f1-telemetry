@@ -22,11 +22,9 @@ object TracedPacket {
     val tracer = GlobalOpenTelemetry.getTracer(TRACER_NAME)
     
     val uniqueTraceparents = batchDF
-      .select("traceparent")
-      .filter(col("traceparent").isNotNull)
-      .distinct()
       .collect()
-      .map(_.getString(0))
+      .flatMap(_.traceparent)
+      .distinct
     
     uniqueTraceparents.foreach { traceparent =>
       val spanBuilder = tracer.spanBuilder(spanName)
