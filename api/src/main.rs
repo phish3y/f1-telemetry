@@ -233,8 +233,8 @@ async fn consume_speed(
                                         }
                                         Ok(json_str) => {
                                             if let Err(e) = broadcast_tx.send(json_str) {
-                                                log::error!(
-                                                    "failed to broadcast speed message: {}",
+                                                log::debug!(
+                                                    "no active SSE clients to receive speed message: {}",
                                                     e
                                                 );
                                             }
@@ -300,8 +300,8 @@ async fn consume_rpm(
                                         }
                                         Ok(json_str) => {
                                             if let Err(e) = broadcast_tx.send(json_str) {
-                                                log::error!(
-                                                    "failed to broadcast rpm message: {}",
+                                                log::debug!(
+                                                    "no active SSE clients to receive rpm message: {}",
                                                     e
                                                 );
                                             }

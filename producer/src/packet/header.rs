@@ -19,7 +19,7 @@ pub struct PacketHeader {
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Hash)]
 pub enum PacketId {
     Motion = 0,
     Session = 1,

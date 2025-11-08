@@ -1,4 +1,4 @@
-use std::{env, net::UdpSocket, time::Duration};
+use std::{collections::HashSet, env, net::UdpSocket, time::Duration};
 
 use opentelemetry::{global::{self}, propagation::TextMapCompositePropagator, trace::{Span, Tracer}, KeyValue};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig};
@@ -64,6 +64,8 @@ async fn main() {
         &lobby_info_topic,
         &participants_topic
     );
+
+    let mut logged_packets: HashSet<packet::header::PacketId> = HashSet::new();
 
     loop {
         let mut buf = [0u8; 2048];
@@ -156,6 +158,10 @@ async fn main() {
 
                             match serde_json::to_string(telemetry_packet) {
                                 Ok(json_data) => {
+                                    if logged_packets.insert(packet::header::PacketId::CarTelemetry) {
+                                        log::debug!("first car_telemetry packet data: {}", json_data);
+                                    }
+                                    
                                     let session_uid = telemetry_packet.m_header.m_session_uid;
                                     let key = format!("session_{}", session_uid);
 
@@ -259,6 +265,10 @@ async fn main() {
 
                             match serde_json::to_string(lap_packet) {
                                 Ok(json_data) => {
+                                    if logged_packets.insert(packet::header::PacketId::Lap) {
+                                        log::debug!("first lap packet data: {}", json_data);
+                                    }
+                                    
                                     let session_uid = lap_packet.m_header.m_session_uid;
                                     let key = format!("session_{}", session_uid);
 
@@ -341,6 +351,10 @@ async fn main() {
 
                             match serde_json::to_string(lobby_info_packet) {
                                 Ok(json_data) => {
+                                    if logged_packets.insert(packet::header::PacketId::LobbyInfo) {
+                                        log::debug!("first lobby_info packet data: {}", json_data);
+                                    }
+                                    
                                     let session_uid = lobby_info_packet.m_header.m_session_uid;
                                     let key = format!("session_{}", session_uid);
 
@@ -439,6 +453,10 @@ async fn main() {
 
                             match serde_json::to_string(participants_packet) {
                                 Ok(json_data) => {
+                                    if logged_packets.insert(packet::header::PacketId::Participants) {
+                                        log::debug!("first participants packet data: {}", json_data);
+                                    }
+                                    
                                     let session_uid = participants_packet.m_header.m_session_uid;
                                     let key = format!("session_{}", session_uid);
 
