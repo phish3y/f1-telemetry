@@ -19,9 +19,9 @@ import org.apache.spark.sql.streaming.Trigger
 import packet.Header
 import packet.payload.{Lap, PacketLap, CarTelemetry, PacketCarTelemetry}
 import aggregation.{SpeedAggregation, TracedSpeedAggregation, RPMAggregation, TracedRPMAggregation, TracedAggregation}
-import model.{Lap => LapModel, TracedLap, TracedPacket}
 import model.{Participant => ParticipantModel, TracedParticipant}
 import model.{LobbyInfo => LobbyInfoModel, TracedLobbyInfo}
+import model.TracedPacket
 import packet.payload.PacketParticipants
 import packet.payload.LobbyInfo
 import packet.payload.PacketLobbyInfo
@@ -86,8 +86,8 @@ object Consumer {
       .config("spark.sql.catalog.local", "org.apache.iceberg.spark.SparkCatalog")
       .config("spark.sql.catalog.local.type", "hadoop")
       .config("spark.sql.catalog.local.warehouse", warehousePath)
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer") // TODO
-      .config("spark.sql.adaptive.enabled", "false")                            // TODO
+      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .config("spark.sql.adaptive.enabled", "false")
       .config("fs.permissions.umask-mode", "000")
       .getOrCreate()
 
@@ -96,7 +96,8 @@ object Consumer {
     def createIcebergTables(): Unit = {
       spark.sql("""
         CREATE TABLE IF NOT EXISTS local.lap (
-          timestamp timestamp,
+          window_start timestamp,
+          window_end timestamp,
           session_uid bigint,
           session_time float,
           car_index int,
@@ -111,7 +112,8 @@ object Consumer {
           penalties int,
           total_warnings int,
           corner_cutting_warnings int,
-          grid_position int
+          grid_position int,
+          sample_count bigint
         ) USING iceberg
         PARTITIONED BY (session_uid)
       """)
@@ -245,20 +247,42 @@ object Consumer {
       .outputMode("append")
       .start()
 
-    // historical only - Iceberg
+    // lap aggregation - Iceberg only
     val lapSchema = Encoders.product[PacketLap].schema
-    val lapStream = spark.readStream
+    val lapStreamRaw = spark.readStream
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBroker)
       .option("subscribe", lapTopic)
       .option("includeHeaders", "true")
       .load()
+    
+    val lapWithTrace = lapStreamRaw
       .select(
-        from_json($"value".cast("string"), lapSchema).as("_1"),
-        expr("filter(headers, x -> x.key = 'traceparent')[0].value").cast("string").as("_2")
+        from_json($"value".cast("string"), lapSchema).as("data"),
+        expr("filter(headers, x -> x.key = 'traceparent')[0].value").cast("string").as("traceparent")
       )
-      .as[(PacketLap, String)]
+      .select($"data.*", $"traceparent")
 
+    val lapAggregation = aggregation.LapAggregation.calculate(lapWithTrace)
+
+    lapAggregation
+      .writeStream
+      .foreachBatch { (batchDF: Dataset[aggregation.TracedLapAggregation], _: Long) =>
+        import batchDF.sparkSession.implicits._
+        val aggregations = batchDF.map(_.aggregation)
+        aggregations
+          .write
+          .format("iceberg")
+          .mode("append")
+          .option("path", s"$warehousePath/lap")
+          .option("table", "local.lap")
+          .save()
+      }
+      .option("checkpointLocation", "/tmp/spark-checkpoints/lap")
+      .outputMode("append")
+      .start()
+
+    // historical only - Iceberg
     val participantsSchema = Encoders.product[PacketParticipants].schema
     val participantsStream = spark.readStream
       .format("kafka")
@@ -284,17 +308,6 @@ object Consumer {
         expr("filter(headers, x -> x.key = 'traceparent')[0].value").cast("string").as("_2")
       )
       .as[(PacketLobbyInfo, String)]
-
-    LapModel
-      .fromPacket(lapStream)
-      .writeStream
-      .foreachBatch { (batchDF: Dataset[TracedLap], _: Long) =>
-        TracedPacket.writeWithTracing(batchDF, "local.lap", s"$warehousePath/lap", "lap-write")
-      }
-      .option("checkpointLocation", "/tmp/spark-checkpoints/lap")
-      .outputMode("append")
-      .trigger(Trigger.ProcessingTime("30 seconds"))
-      .start()
 
     ParticipantModel
       .fromPacket(participantsStream)

@@ -40,9 +40,9 @@ object RPMAggregation {
       )
 
     playerCarTelemetry
-      .withWatermark("timestamp", "5 seconds")
+      .withWatermark("timestamp", "1 second")
       .groupBy(
-        window($"timestamp", "3 seconds"),
+        window($"timestamp", "1 second"),
         $"session_uid"
       )
       .agg(
